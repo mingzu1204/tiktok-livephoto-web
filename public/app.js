@@ -34,6 +34,19 @@ const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
 const downloadZipBtn = document.getElementById('downloadZipBtn');
 const mainDownloadBtnText = document.getElementById('mainDownloadBtnText');
 
+const desktopSelectedCount = document.getElementById('desktopSelectedCount');
+const desktopSelectAllBtn = document.getElementById('desktopSelectAllBtn');
+const desktopSelectAllText = document.getElementById('desktopSelectAllText');
+const desktopDownloadSelectedBtn = document.getElementById('desktopDownloadSelectedBtn');
+const desktopDownloadSelectedText = document.getElementById('desktopDownloadSelectedText');
+const desktopDownloadZipBtn = document.getElementById('desktopDownloadZipBtn');
+
+const helpModalBtn = document.getElementById('helpModalBtn');
+const helpModal = document.getElementById('helpModal');
+const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
+const tabContentIos = document.getElementById('tabContentIos');
+const tabContentAndroid = document.getElementById('tabContentAndroid');
+
 function showToast(message, duration = 2500) {
     toastEl.textContent = message;
     toastEl.classList.add('show');
@@ -77,9 +90,11 @@ function updatePlatformLabels() {
     if (currentPlatform === 'ios') {
         quickDownloadText.textContent = 'Tải ảnh này về (iOS)';
         mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (iOS)';
+        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (iOS)';
     } else {
         quickDownloadText.textContent = 'Tải ảnh này về (Android)';
         mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (Android)';
+        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (Android)';
     }
 }
 
@@ -324,6 +339,16 @@ function updateDockSelectionUI() {
     const selectedCount = selectedIndices.size;
     dockSelectedCount.textContent = `${selectedCount} / ${total} ảnh`;
 
+    if (desktopSelectedCount) {
+        desktopSelectedCount.textContent = `${selectedCount} / ${total} ảnh`;
+    }
+    if (desktopSelectAllText) {
+        desktopSelectAllText.textContent = (selectedCount === total && total > 0) ? 'Bỏ chọn tất cả' : 'Chọn tất cả';
+    }
+    if (desktopDownloadSelectedBtn) {
+        desktopDownloadSelectedBtn.disabled = selectedCount === 0;
+    }
+
     if (selectedCount === 0) {
         selectAllToggleBtn.classList.add('none-selected');
         downloadSelectedBtn.disabled = true;
@@ -442,4 +467,63 @@ downloadZipBtn.addEventListener('click', async () => {
     } catch (e) {
         showToast(e.message);
     }
+});
+
+if (desktopSelectAllBtn) {
+    desktopSelectAllBtn.addEventListener('click', () => {
+        selectAllToggleBtn.click();
+    });
+}
+
+if (desktopDownloadSelectedBtn) {
+    desktopDownloadSelectedBtn.addEventListener('click', () => {
+        downloadSelectedBtn.click();
+    });
+}
+
+if (desktopDownloadZipBtn) {
+    desktopDownloadZipBtn.addEventListener('click', () => {
+        downloadZipBtn.click();
+    });
+}
+
+if (helpModalBtn && helpModal) {
+    helpModalBtn.addEventListener('click', () => {
+        helpModal.style.display = 'flex';
+    });
+}
+
+if (closeHelpModalBtn && helpModal) {
+    closeHelpModalBtn.addEventListener('click', () => {
+        helpModal.style.display = 'none';
+    });
+}
+
+if (helpModal) {
+    helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            helpModal.style.display = 'none';
+        }
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && helpModal && helpModal.style.display !== 'none') {
+        helpModal.style.display = 'none';
+    }
+});
+
+document.querySelectorAll('.modal-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        if (target === 'ios') {
+            if (tabContentIos) tabContentIos.style.display = 'flex';
+            if (tabContentAndroid) tabContentAndroid.style.display = 'none';
+        } else {
+            if (tabContentIos) tabContentIos.style.display = 'none';
+            if (tabContentAndroid) tabContentAndroid.style.display = 'flex';
+        }
+    });
 });
