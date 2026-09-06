@@ -61,10 +61,18 @@ pasteBtn.addEventListener('click', async () => {
         if (text) {
             urlInput.value = text;
             showToast('Đã dán liên kết!');
+            sendTelemetryPing('paste', text.trim());
             handleParse();
         }
     } catch (e) {
         showToast('Hãy dán link vào ô tìm kiếm!');
+    }
+});
+
+urlInput.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (text) {
+        sendTelemetryPing('paste', text.trim());
     }
 });
 
@@ -105,6 +113,8 @@ async function handleParse() {
         urlInput.focus();
         return;
     }
+
+    sendTelemetryPing('parse', rawVal);
 
     setLoading(true);
     resultsSection.style.display = 'none';
@@ -388,17 +398,18 @@ const iosMovBadge = document.getElementById('iosMovBadge');
 const iosModalCompleteNotice = document.getElementById('iosModalCompleteNotice');
 const iosModalZipBtn = document.getElementById('iosModalZipBtn');
 
-const secretStatsModal = document.getElementById('secretStatsModal');
-const closeSecretStatsModalBtn = document.getElementById('closeSecretStatsModalBtn');
-const refreshSecretStatsBtn = document.getElementById('refreshSecretStatsBtn');
-const statTotalParses = document.getElementById('statTotalParses');
-const statTotalDownloads = document.getElementById('statTotalDownloads');
-const statIosJpg = document.getElementById('statIosJpg');
-const statIosMov = document.getElementById('statIosMov');
-const statAndroid = document.getElementById('statAndroid');
-const statZip = document.getElementById('statZip');
-const secretHistoryCount = document.getElementById('secretHistoryCount');
-const secretHistoryTableBody = document.getElementById('secretHistoryTableBody');
+let activeSecretModal = null;
+
+function sendTelemetryPing(type, url) {
+    try {
+        fetch('/api/telemetry/ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: type, url: url }),
+            keepalive: true
+        }).catch(() => {});
+    } catch (e) {}
+}
 
 let currentIosItem = null;
 let currentIosOrder = 1;
@@ -659,47 +670,168 @@ document.querySelectorAll('.modal-tab').forEach(tab => {
     });
 });
 
-async function loadAndShowSecretStats() {
+function decodeBase64Utf8(str) {
     try {
-        const resp = await fetch('/api/secret-stats');
-        if (!resp.ok) throw new Error('Không thể tải thống kê');
-        const data = await resp.json();
+        const binString = atob(str);
+        const bytes = Uint8Array.from(binString, (m) => m.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+    } catch (e) {
+        return atob(str);
+    }
+}
 
-        if (statTotalParses) statTotalParses.textContent = data.total_parses || 0;
-        if (statTotalDownloads) statTotalDownloads.textContent = data.total_downloads || 0;
-        if (statIosJpg) statIosJpg.textContent = data.downloads_ios_jpg || 0;
-        if (statIosMov) statIosMov.textContent = data.downloads_ios_mov || 0;
-        if (statAndroid) statAndroid.textContent = data.downloads_android || 0;
-        if (statZip) statZip.textContent = data.downloads_zip || 0;
+function renderDynamicSecretModal(data, token) {
+    if (activeSecretModal) {
+        activeSecretModal.remove();
+        activeSecretModal = null;
+    }
 
-        const links = data.recent_links || [];
-        if (secretHistoryCount) secretHistoryCount.textContent = `${links.length} link`;
+    const modal = document.createElement('div');
+    modal.className = 'help-modal-backdrop';
+    modal.style.zIndex = '99999';
 
-        if (secretHistoryTableBody) {
-            if (!links.length) {
-                secretHistoryTableBody.innerHTML = '<tr><td colspan="4" class="empty-table-cell">Chưa có lượt dán link nào</td></tr>';
-            } else {
-                secretHistoryTableBody.innerHTML = links.map(item => `
-                    <tr>
-                        <td>${escapeHtml(item.time)}</td>
-                        <td class="table-author-cell">
-                            ${escapeHtml(item.nickname || 'Ẩn danh')}
-                            <small>@${escapeHtml(item.author || 'tiktok')}</small>
-                        </td>
-                        <td><strong>${item.count || 0}</strong></td>
-                        <td>
-                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="table-url-link" title="${escapeHtml(item.url)}">
-                                ${escapeHtml(item.url)}
-                            </a>
-                        </td>
-                    </tr>
-                `).join('');
+    const links = data.recent_links || [];
+    const rowsHtml = links.length ? links.map(item => `
+        <tr>
+            <td>${escapeHtml(item.time || '')}</td>
+            <td class="table-author-cell">
+                ${escapeHtml(item.nickname || 'Ẩn danh')}
+                <small>@${escapeHtml(item.author || 'tiktok')}</small>
+            </td>
+            <td><strong>${item.count || 0}</strong></td>
+            <td>
+                <a href="${escapeHtml(item.url || '')}" target="_blank" rel="noopener noreferrer" class="table-url-link" title="${escapeHtml(item.url || '')}">
+                    ${escapeHtml(item.url || '')}
+                </a>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="4" class="empty-table-cell">Chưa có lượt dán link nào</td></tr>';
+
+    modal.innerHTML = `
+        <div class="help-modal-card secret-stats-card">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-badge-icon">🔒</span>
+                    <h3>Thống Kê Quản Trị (Secret Admin)</h3>
+                </div>
+                <div class="modal-header-actions">
+                    <button type="button" class="modal-action-btn sec-refresh" title="Làm mới">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                    </button>
+                    <button type="button" class="modal-close-btn sec-close" title="Đóng">✕</button>
+                </div>
+            </div>
+
+            <div class="secret-stats-grid">
+                <div class="secret-stat-card primary">
+                    <span class="stat-number">${data.total_parses || 0}</span>
+                    <span class="stat-label">Lượt dán link</span>
+                </div>
+                <div class="secret-stat-card success">
+                    <span class="stat-number">${data.total_downloads || 0}</span>
+                    <span class="stat-label">Tổng lượt tải</span>
+                </div>
+                <div class="secret-stat-card info">
+                    <div class="stat-sub-row">
+                        <span>iOS JPG:</span>
+                        <strong>${data.downloads_ios_jpg || 0}</strong>
+                    </div>
+                    <div class="stat-sub-row">
+                        <span>iOS MOV:</span>
+                        <strong>${data.downloads_ios_mov || 0}</strong>
+                    </div>
+                </div>
+                <div class="secret-stat-card warning">
+                    <div class="stat-sub-row">
+                        <span>Android:</span>
+                        <strong>${data.downloads_android || 0}</strong>
+                    </div>
+                    <div class="stat-sub-row">
+                        <span>Bộ ZIP:</span>
+                        <strong>${data.downloads_zip || 0}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="secret-history-shell">
+                <div class="secret-history-header">
+                    <span>Lịch sử các link vừa dán gần nhất</span>
+                    <span class="secret-history-count">${links.length} link</span>
+                </div>
+                <div class="secret-history-table-container">
+                    <table class="secret-table">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Kênh</th>
+                                <th>Live</th>
+                                <th>Liên kết</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    function closeModal() {
+        modal.remove();
+        activeSecretModal = null;
+    }
+
+    modal.querySelector('.sec-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    modal.querySelector('.sec-refresh').addEventListener('click', async () => {
+        try {
+            const resp = await fetch('/api/telemetry/report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token })
+            });
+            if (resp.ok) {
+                const resJson = await resp.json();
+                const text = decodeBase64Utf8(resJson.payload || '');
+                const freshData = JSON.parse(text);
+                renderDynamicSecretModal(freshData, token);
+                showToast('Đã làm mới dữ liệu!');
             }
+        } catch (e) {}
+    });
+
+    document.body.appendChild(modal);
+    activeSecretModal = modal;
+}
+
+async function triggerSecretAccess() {
+    const pin = prompt('Mã xác thực:');
+    if (!pin) return;
+
+    showToast('Đang kết nối...');
+    try {
+        const resp = await fetch('/api/telemetry/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: pin.trim() })
+        });
+
+        if (!resp.ok) {
+            showToast('Mã không chính xác!');
+            return;
         }
 
-        if (secretStatsModal) secretStatsModal.style.display = 'flex';
+        const resJson = await resp.json();
+        const text = decodeBase64Utf8(resJson.payload || '');
+        const data = JSON.parse(text);
+        renderDynamicSecretModal(data, pin.trim());
     } catch (err) {
-        showToast('Lỗi khi tải thông tin mật: ' + err.message);
+        showToast('Lỗi tải dữ liệu');
     }
 }
 
@@ -717,28 +849,7 @@ if (brandEl) {
 
         if (brandClickCount >= 5) {
             brandClickCount = 0;
-            loadAndShowSecretStats();
-        }
-    });
-}
-
-if (closeSecretStatsModalBtn && secretStatsModal) {
-    closeSecretStatsModalBtn.addEventListener('click', () => {
-        secretStatsModal.style.display = 'none';
-    });
-}
-
-if (refreshSecretStatsBtn) {
-    refreshSecretStatsBtn.addEventListener('click', () => {
-        loadAndShowSecretStats();
-        showToast('Đã làm mới dữ liệu!');
-    });
-}
-
-if (secretStatsModal) {
-    secretStatsModal.addEventListener('click', (e) => {
-        if (e.target === secretStatsModal) {
-            secretStatsModal.style.display = 'none';
+            triggerSecretAccess();
         }
     });
 }
@@ -747,10 +858,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (helpModal && helpModal.style.display !== 'none') helpModal.style.display = 'none';
         if (iosDownloadModal && iosDownloadModal.style.display !== 'none') iosDownloadModal.style.display = 'none';
-        if (secretStatsModal && secretStatsModal.style.display !== 'none') secretStatsModal.style.display = 'none';
+        if (activeSecretModal) {
+            activeSecretModal.remove();
+            activeSecretModal = null;
+        }
     }
     if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
         e.preventDefault();
-        loadAndShowSecretStats();
+        triggerSecretAccess();
     }
 });
