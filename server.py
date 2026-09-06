@@ -38,8 +38,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+PUBLIC_DIR = Path(__file__).parent / "public"
 STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -168,7 +171,21 @@ def fetch_data_from_tikwm(clean_url: str) -> dict:
 
 @app.get("/")
 def read_root():
+    if (PUBLIC_DIR / "index.html").exists():
+        return FileResponse(PUBLIC_DIR / "index.html")
     return FileResponse(STATIC_DIR / "index.html")
+
+@app.get("/style.css")
+def get_style():
+    if (PUBLIC_DIR / "style.css").exists():
+        return FileResponse(PUBLIC_DIR / "style.css", media_type="text/css")
+    return FileResponse(STATIC_DIR / "style.css", media_type="text/css")
+
+@app.get("/app.js")
+def get_script():
+    if (PUBLIC_DIR / "app.js").exists():
+        return FileResponse(PUBLIC_DIR / "app.js", media_type="application/javascript")
+    return FileResponse(STATIC_DIR / "app.js", media_type="application/javascript")
 
 @app.post("/api/parse")
 def parse_tiktok(req: ParseRequest):
