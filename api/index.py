@@ -35,6 +35,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def fix_path_middleware(request, call_next):
+    for h in ["x-matched-path", "x-invoke-path", "x-vercel-matched-path"]:
+        orig = request.headers.get(h)
+        if orig and orig != request.scope.get("path"):
+            request.scope["path"] = orig
+            break
+    return await call_next(request)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
 STATIC_DIR = BASE_DIR / "static"
