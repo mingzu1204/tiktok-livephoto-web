@@ -39,14 +39,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def fix_path_middleware(request, call_next):
-    for h in ["x-matched-path", "x-invoke-path", "x-vercel-matched-path"]:
-        orig = request.headers.get(h)
-        if orig and orig != request.scope.get("path"):
-            request.scope["path"] = orig
-            break
-    return await call_next(request)
+class PathFixMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
+            for h in [b"x-matched-path", b"x-invoke-path", b"x-vercel-matched-path"]:
+                val = headers.get(h)
+                if val:
+                    scope["path"] = val.decode("latin1")
+                    break
+        await self.app(scope, receive, send)
+
+app.add_middleware(PathFixMiddleware)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -355,7 +362,7 @@ def parse_tiktok(req: ParseRequest):
     live_images = data.get("live_images", [])
     is_story = bool(data.get("is_story"))
 
-    if not live_images and (is_story or data.get("play")):
+    if not live_images and is_story:
         cover = data.get("cover") or data.get("origin_cover") or ""
         play = data.get("play") or ""
         if play and cover:
@@ -377,6 +384,9 @@ def parse_tiktok(req: ParseRequest):
             })
             
     if not items:
+        dur = data.get("duration", 0)
+        if dur and dur > 0:
+            raise HTTPException(status_code=404, detail=f"Liên kết này là Video TikTok thông thường ({dur} giây), không phải bài đăng Live Photo! Apple chỉ hỗ trợ Live Photo từ album ảnh động (1.5 - 3 giây).")
         raise HTTPException(status_code=404, detail="Bài đăng này không chứa bất kỳ ảnh Live Photo nào! Có thể đây là bài đăng ảnh tĩnh hoặc video thông thường.")
 
     record_stat("parse", {
@@ -465,7 +475,7 @@ def download_zip(req: DownloadZipRequest):
     images = data.get("images", [])
     live_images = data.get("live_images", [])
 
-    if not live_images and (data.get("is_story") or data.get("play")):
+    if not live_images and data.get("is_story"):
         cover = data.get("cover") or data.get("origin_cover") or ""
         play = data.get("play") or ""
         if play and cover:
