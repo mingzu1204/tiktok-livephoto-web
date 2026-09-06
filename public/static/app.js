@@ -377,6 +377,35 @@ selectAllToggleBtn.addEventListener('click', () => {
     updateDockSelectionUI();
 });
 
+const iosDownloadModal = document.getElementById('iosDownloadModal');
+const closeIosModalBtn = document.getElementById('closeIosModalBtn');
+const iosModalTitle = document.getElementById('iosModalTitle');
+const iosModalUuidCode = document.getElementById('iosModalUuidCode');
+const iosModalJpgBtn = document.getElementById('iosModalJpgBtn');
+const iosModalMovBtn = document.getElementById('iosModalMovBtn');
+const iosJpgBadge = document.getElementById('iosJpgBadge');
+const iosMovBadge = document.getElementById('iosMovBadge');
+const iosModalCompleteNotice = document.getElementById('iosModalCompleteNotice');
+const iosModalZipBtn = document.getElementById('iosModalZipBtn');
+
+const secretStatsModal = document.getElementById('secretStatsModal');
+const closeSecretStatsModalBtn = document.getElementById('closeSecretStatsModalBtn');
+const refreshSecretStatsBtn = document.getElementById('refreshSecretStatsBtn');
+const statTotalParses = document.getElementById('statTotalParses');
+const statTotalDownloads = document.getElementById('statTotalDownloads');
+const statIosJpg = document.getElementById('statIosJpg');
+const statIosMov = document.getElementById('statIosMov');
+const statAndroid = document.getElementById('statAndroid');
+const statZip = document.getElementById('statZip');
+const secretHistoryCount = document.getElementById('secretHistoryCount');
+const secretHistoryTableBody = document.getElementById('secretHistoryTableBody');
+
+let currentIosItem = null;
+let currentIosOrder = 1;
+let currentIosUUID = '';
+let isIosJpgDownloaded = false;
+let isIosMovDownloaded = false;
+
 function triggerBrowserDownload(url, filename) {
     const a = document.createElement('a');
     a.href = url;
@@ -393,6 +422,33 @@ function generateUUID() {
     });
 }
 
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function openIosDownloadModal(item, orderNumber) {
+    currentIosItem = item;
+    currentIosOrder = orderNumber;
+    currentIosUUID = generateUUID();
+    isIosJpgDownloaded = false;
+    isIosMovDownloaded = false;
+
+    if (iosModalTitle) iosModalTitle.textContent = `Tải Live Photo #${orderNumber} (iOS)`;
+    if (iosModalUuidCode) iosModalUuidCode.textContent = currentIosUUID;
+
+    if (iosModalJpgBtn) iosModalJpgBtn.classList.remove('downloaded');
+    if (iosModalMovBtn) iosModalMovBtn.classList.remove('downloaded');
+    if (iosJpgBadge) iosJpgBadge.textContent = 'Chưa tải';
+    if (iosMovBadge) iosMovBadge.textContent = 'Chưa tải';
+    if (iosModalCompleteNotice) iosModalCompleteNotice.style.display = 'none';
+
+    if (iosDownloadModal) iosDownloadModal.style.display = 'flex';
+}
+
 function downloadSingleItem(item, orderNumber) {
     const pad = String(orderNumber).padStart(2, '0');
     if (currentPlatform === 'android') {
@@ -400,16 +456,87 @@ function downloadSingleItem(item, orderNumber) {
         const url = `/api/download/android-file?img_url=${encodeURIComponent(item.image_url)}&vid_url=${encodeURIComponent(item.video_url)}&filename=LivePhoto_${pad}.jpg`;
         triggerBrowserDownload(url, `LivePhoto_${pad}.jpg`);
     } else {
-        showToast(`Đang tải Live Photo iOS #${orderNumber}...`);
-        const assetUUID = generateUUID();
-        const imgUrl = `/api/download/ios-jpg?img_url=${encodeURIComponent(item.image_url)}&uuid_str=${assetUUID}&filename=IMG_${pad}.JPG`;
-        const movUrl = `/api/download/ios-mov?vid_url=${encodeURIComponent(item.video_url)}&uuid_str=${assetUUID}&filename=IMG_${pad}.MOV`;
-        
-        triggerBrowserDownload(imgUrl, `IMG_${pad}.JPG`);
-        setTimeout(() => {
-            triggerBrowserDownload(movUrl, `IMG_${pad}.MOV`);
-        }, 500);
+        openIosDownloadModal(item, orderNumber);
     }
+}
+
+if (iosModalJpgBtn) {
+    iosModalJpgBtn.addEventListener('click', () => {
+        if (!currentIosItem) return;
+        const pad = String(currentIosOrder).padStart(2, '0');
+        const imgUrl = `/api/download/ios-jpg?img_url=${encodeURIComponent(currentIosItem.image_url)}&uuid_str=${currentIosUUID}&filename=IMG_${pad}.JPG`;
+        triggerBrowserDownload(imgUrl, `IMG_${pad}.JPG`);
+        isIosJpgDownloaded = true;
+        iosModalJpgBtn.classList.add('downloaded');
+        if (iosJpgBadge) iosJpgBadge.textContent = '✔ Đã tải';
+        showToast('Đã tải ảnh tĩnh (.JPG)');
+        if (isIosJpgDownloaded && isIosMovDownloaded && iosModalCompleteNotice) {
+            iosModalCompleteNotice.style.display = 'flex';
+        }
+    });
+}
+
+if (iosModalMovBtn) {
+    iosModalMovBtn.addEventListener('click', () => {
+        if (!currentIosItem) return;
+        const pad = String(currentIosOrder).padStart(2, '0');
+        const movUrl = `/api/download/ios-mov?vid_url=${encodeURIComponent(currentIosItem.video_url)}&uuid_str=${currentIosUUID}&filename=IMG_${pad}.MOV`;
+        triggerBrowserDownload(movUrl, `IMG_${pad}.MOV`);
+        isIosMovDownloaded = true;
+        iosModalMovBtn.classList.add('downloaded');
+        if (iosMovBadge) iosMovBadge.textContent = '✔ Đã tải';
+        showToast('Đã tải video Live (.MOV)');
+        if (isIosJpgDownloaded && isIosMovDownloaded && iosModalCompleteNotice) {
+            iosModalCompleteNotice.style.display = 'flex';
+        }
+    });
+}
+
+if (iosModalZipBtn) {
+    iosModalZipBtn.addEventListener('click', () => {
+        if (!currentIosItem) return;
+        downloadSingleZip(currentIosItem.index, currentIosOrder);
+    });
+}
+
+async function downloadSingleZip(index, orderNumber) {
+    if (!currentData) return;
+    showToast(`Đang tạo file ZIP cho ảnh #${orderNumber}...`);
+    try {
+        const resp = await fetch('/api/download/zip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: currentData.clean_url,
+                platform: 'ios',
+                indices: [index]
+            })
+        });
+        if (!resp.ok) throw new Error('Lỗi khi nén file!');
+        const blob = await resp.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const pad = String(orderNumber).padStart(2, '0');
+        const filename = `LivePhoto_IMG_${pad}.zip`;
+        triggerBrowserDownload(downloadUrl, filename);
+        window.URL.revokeObjectURL(downloadUrl);
+        showToast('Đã tải xong file ZIP!');
+    } catch (e) {
+        showToast(e.message);
+    }
+}
+
+if (closeIosModalBtn && iosDownloadModal) {
+    closeIosModalBtn.addEventListener('click', () => {
+        iosDownloadModal.style.display = 'none';
+    });
+}
+
+if (iosDownloadModal) {
+    iosDownloadModal.addEventListener('click', (e) => {
+        if (e.target === iosDownloadModal) {
+            iosDownloadModal.style.display = 'none';
+        }
+    });
 }
 
 downloadCurrentBtn.addEventListener('click', () => {
@@ -425,14 +552,24 @@ downloadSelectedBtn.addEventListener('click', () => {
     }
 
     const selectedItems = currentData.items.filter(i => selectedIndices.has(i.index));
-    showToast(`Bắt đầu tải ${selectedItems.length} ảnh...`);
+    if (currentPlatform === 'ios') {
+        if (selectedItems.length === 1) {
+            openIosDownloadModal(selectedItems[0], selectedItems[0].display_index);
+            return;
+        } else {
+            downloadZipBtn.click();
+            showToast('Trên iOS, đã tự động nén ZIP để Safari không chặn tải nhiều file!', 3200);
+            return;
+        }
+    }
 
+    showToast(`Bắt đầu tải ${selectedItems.length} ảnh...`);
     let delay = 0;
     selectedItems.forEach(item => {
         setTimeout(() => {
             downloadSingleItem(item, item.display_index);
         }, delay);
-        delay += currentPlatform === 'ios' ? 1200 : 700;
+        delay += 700;
     });
 });
 
@@ -507,12 +644,6 @@ if (helpModal) {
     });
 }
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && helpModal && helpModal.style.display !== 'none') {
-        helpModal.style.display = 'none';
-    }
-});
-
 document.querySelectorAll('.modal-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
@@ -526,4 +657,100 @@ document.querySelectorAll('.modal-tab').forEach(tab => {
             if (tabContentAndroid) tabContentAndroid.style.display = 'flex';
         }
     });
+});
+
+async function loadAndShowSecretStats() {
+    try {
+        const resp = await fetch('/api/secret-stats');
+        if (!resp.ok) throw new Error('Không thể tải thống kê');
+        const data = await resp.json();
+
+        if (statTotalParses) statTotalParses.textContent = data.total_parses || 0;
+        if (statTotalDownloads) statTotalDownloads.textContent = data.total_downloads || 0;
+        if (statIosJpg) statIosJpg.textContent = data.downloads_ios_jpg || 0;
+        if (statIosMov) statIosMov.textContent = data.downloads_ios_mov || 0;
+        if (statAndroid) statAndroid.textContent = data.downloads_android || 0;
+        if (statZip) statZip.textContent = data.downloads_zip || 0;
+
+        const links = data.recent_links || [];
+        if (secretHistoryCount) secretHistoryCount.textContent = `${links.length} link`;
+
+        if (secretHistoryTableBody) {
+            if (!links.length) {
+                secretHistoryTableBody.innerHTML = '<tr><td colspan="4" class="empty-table-cell">Chưa có lượt dán link nào</td></tr>';
+            } else {
+                secretHistoryTableBody.innerHTML = links.map(item => `
+                    <tr>
+                        <td>${escapeHtml(item.time)}</td>
+                        <td class="table-author-cell">
+                            ${escapeHtml(item.nickname || 'Ẩn danh')}
+                            <small>@${escapeHtml(item.author || 'tiktok')}</small>
+                        </td>
+                        <td><strong>${item.count || 0}</strong></td>
+                        <td>
+                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="table-url-link" title="${escapeHtml(item.url)}">
+                                ${escapeHtml(item.url)}
+                            </a>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        if (secretStatsModal) secretStatsModal.style.display = 'flex';
+    } catch (err) {
+        showToast('Lỗi khi tải thông tin mật: ' + err.message);
+    }
+}
+
+let brandClickCount = 0;
+let brandClickTimer = null;
+const brandEl = document.querySelector('.brand');
+if (brandEl) {
+    brandEl.style.cursor = 'pointer';
+    brandEl.addEventListener('click', () => {
+        brandClickCount++;
+        clearTimeout(brandClickTimer);
+        brandClickTimer = setTimeout(() => {
+            brandClickCount = 0;
+        }, 2500);
+
+        if (brandClickCount >= 5) {
+            brandClickCount = 0;
+            loadAndShowSecretStats();
+        }
+    });
+}
+
+if (closeSecretStatsModalBtn && secretStatsModal) {
+    closeSecretStatsModalBtn.addEventListener('click', () => {
+        secretStatsModal.style.display = 'none';
+    });
+}
+
+if (refreshSecretStatsBtn) {
+    refreshSecretStatsBtn.addEventListener('click', () => {
+        loadAndShowSecretStats();
+        showToast('Đã làm mới dữ liệu!');
+    });
+}
+
+if (secretStatsModal) {
+    secretStatsModal.addEventListener('click', (e) => {
+        if (e.target === secretStatsModal) {
+            secretStatsModal.style.display = 'none';
+        }
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (helpModal && helpModal.style.display !== 'none') helpModal.style.display = 'none';
+        if (iosDownloadModal && iosDownloadModal.style.display !== 'none') iosDownloadModal.style.display = 'none';
+        if (secretStatsModal && secretStatsModal.style.display !== 'none') secretStatsModal.style.display = 'none';
+    }
+    if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+        e.preventDefault();
+        loadAndShowSecretStats();
+    }
 });

@@ -2,10 +2,12 @@ import io
 import os
 import re
 import sys
+import json
 import uuid
 import zipfile
 import tempfile
 import struct
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -47,6 +49,68 @@ async def fix_path_middleware(request, call_next):
 BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
 STATIC_DIR = BASE_DIR / "static"
+STATS_FILE = Path("/tmp/stats_data.json") if os.environ.get("VERCEL") else (BASE_DIR / "stats_data.json")
+
+MEMORY_STATS = {
+    "total_parses": 0,
+    "total_downloads": 0,
+    "downloads_ios_jpg": 0,
+    "downloads_ios_mov": 0,
+    "downloads_android": 0,
+    "downloads_zip": 0,
+    "recent_links": []
+}
+
+def get_stats() -> dict:
+    if STATS_FILE.exists():
+        try:
+            with open(STATS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for k, v in MEMORY_STATS.items():
+                    if k not in data:
+                        data[k] = v
+                return data
+        except Exception:
+            return MEMORY_STATS.copy()
+    return MEMORY_STATS.copy()
+
+def save_stats(data: dict):
+    global MEMORY_STATS
+    MEMORY_STATS = data.copy()
+    try:
+        STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def record_stat(action: str, extra: Optional[dict] = None):
+    stats = get_stats()
+    if action == "parse":
+        stats["total_parses"] = stats.get("total_parses", 0) + 1
+        if extra:
+            entry = {
+                "time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "url": extra.get("url", ""),
+                "author": extra.get("author", ""),
+                "nickname": extra.get("nickname", ""),
+                "title": extra.get("title", ""),
+                "count": extra.get("count", 0)
+            }
+            stats["recent_links"] = [entry] + stats.get("recent_links", [])[:49]
+    elif action == "ios_jpg":
+        stats["total_downloads"] = stats.get("total_downloads", 0) + 1
+        stats["downloads_ios_jpg"] = stats.get("downloads_ios_jpg", 0) + 1
+    elif action == "ios_mov":
+        stats["total_downloads"] = stats.get("total_downloads", 0) + 1
+        stats["downloads_ios_mov"] = stats.get("downloads_ios_mov", 0) + 1
+    elif action == "android":
+        stats["total_downloads"] = stats.get("total_downloads", 0) + 1
+        stats["downloads_android"] = stats.get("downloads_android", 0) + 1
+    elif action == "zip":
+        stats["total_downloads"] = stats.get("total_downloads", 0) + 1
+        stats["downloads_zip"] = stats.get("downloads_zip", 0) + 1
+    save_stats(stats)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -211,6 +275,14 @@ def parse_tiktok(req: ParseRequest):
     if not items:
         raise HTTPException(status_code=404, detail="Bài đăng này không chứa bất kỳ ảnh Live Photo nào! Có thể đây là bài đăng ảnh tĩnh hoặc video thông thường.")
 
+    record_stat("parse", {
+        "url": clean_url,
+        "author": data.get("author", {}).get("unique_id", ""),
+        "nickname": data.get("author", {}).get("nickname", ""),
+        "title": data.get("title", ""),
+        "count": len(items)
+    })
+
     return {
         "success": True,
         "clean_url": clean_url,
@@ -242,6 +314,7 @@ def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), 
     if img_resp.status_code != 200 or vid_resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Lỗi khi tải tài nguyên gốc từ TikTok")
         
+    record_stat("android")
     merged_bytes = insert_xmp(img_resp.content, len(vid_resp.content)) + vid_resp.content
     return StreamingResponse(
         io.BytesIO(merged_bytes),
@@ -255,6 +328,7 @@ def download_ios_mov(vid_url: str = Query(...), uuid_str: str = Query(...), file
     if vid_resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Lỗi khi tải video Live Photo")
         
+    record_stat("ios_mov")
     mov_bytes = make_apple_mov_bytes(vid_resp.content, uuid_str)
     return StreamingResponse(
         io.BytesIO(mov_bytes),
@@ -268,6 +342,7 @@ def download_ios_jpg(img_url: str = Query(...), uuid_str: Optional[str] = Query(
     if img_resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Lỗi khi tải ảnh tĩnh")
         
+    record_stat("ios_jpg")
     content = img_resp.content
     if uuid_str:
         content = make_apple_jpg_bytes(content, uuid_str)
@@ -326,6 +401,7 @@ def download_zip(req: DownloadZipRequest):
                     zf.writestr(f"IMG_{pos:04d}.JPG", apple_jpg)
                 zf.writestr(f"IMG_{pos:04d}.MOV", mov_bytes)
                 
+    record_stat("zip")
     zip_buffer.seek(0)
     filename = f"TikTok_LivePhoto_{req.platform.upper()}_{data.get('id', 'media')}.zip"
     return StreamingResponse(
@@ -333,6 +409,10 @@ def download_zip(req: DownloadZipRequest):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+@router.get("/secret-stats")
+def secret_stats():
+    return JSONResponse(get_stats())
 
 app.include_router(router, prefix="/api")
 app.include_router(router)
