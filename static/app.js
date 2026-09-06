@@ -377,7 +377,7 @@ function downloadSingleItem(item, orderNumber) {
     } else {
         showToast(`Đang tải Live Photo iOS #${orderNumber}...`);
         const assetUUID = generateUUID();
-        const imgUrl = `/api/download/ios-jpg?img_url=${encodeURIComponent(item.image_url)}&filename=IMG_${pad}.JPG`;
+        const imgUrl = `/api/download/ios-jpg?img_url=${encodeURIComponent(item.image_url)}&uuid_str=${assetUUID}&filename=IMG_${pad}.JPG`;
         const movUrl = `/api/download/ios-mov?vid_url=${encodeURIComponent(item.video_url)}&uuid_str=${assetUUID}&filename=IMG_${pad}.MOV`;
         
         triggerBrowserDownload(imgUrl, `IMG_${pad}.JPG`);

@@ -7,9 +7,13 @@ import shutil
 import zipfile
 import tempfile
 import subprocess
+import struct
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import unquote
+
+import piexif
+from mutagen.mp4 import MP4, MP4FreeForm
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
@@ -108,35 +112,48 @@ def insert_xmp(jpeg_bytes: bytes, video_size: int) -> bytes:
     return jpeg_bytes[:insert_idx] + app1_segment + jpeg_bytes[insert_idx:]
 
 def make_apple_mov_bytes(video_bytes: bytes, asset_id: str) -> bytes:
-    ffmpeg_path = shutil.which("ffmpeg")
-    if not ffmpeg_path:
-        return video_bytes
-        
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as in_f:
-        in_f.write(video_bytes)
-        in_path = in_f.name
-        
-    out_path = in_path.replace(".mp4", ".mov")
-    cmd = [
-        ffmpeg_path, "-y", "-i", in_path,
-        "-c", "copy",
-        "-movflags", "use_metadata_tags",
-        "-metadata", f"com.apple.quicktime.content.identifier={asset_id}",
-        out_path
-    ]
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(video_bytes)
+        tmp_path = tmp.name
+
     try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        if os.path.exists(out_path):
-            with open(out_path, "rb") as f:
-                res = f.read()
-            return res
+        mp4 = MP4(tmp_path)
+        if mp4.tags is None:
+            mp4.add_tags()
+        mp4.tags["----:com.apple.quicktime:content.identifier"] = MP4FreeForm(asset_id.encode("utf-8"))
+        mp4.save()
+        with open(tmp_path, "rb") as f:
+            return f.read()
+    except Exception:
+        return video_bytes
     finally:
-        if os.path.exists(in_path):
-            os.remove(in_path)
-        if os.path.exists(out_path):
-            os.remove(out_path)
-            
-    return video_bytes
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+def build_apple_makernote(uuid_str: str) -> bytes:
+    val = uuid_str.encode("ascii") + b"\x00"
+    count = len(val)
+    hdr = b"Apple iOS\x00\x00\x01MM"
+    num_entries = struct.pack(">H", 1)
+    entry = struct.pack(">HHI", 0x0011, 2, count) + struct.pack(">I", 18)
+    next_ifd = b"\x00\x00\x00\x00"
+    return hdr + num_entries + entry + next_ifd + val
+
+def make_apple_jpg_bytes(jpeg_bytes: bytes, asset_id: str) -> bytes:
+    try:
+        try:
+            exif_dict = piexif.load(jpeg_bytes)
+        except Exception:
+            exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+        if "Exif" not in exif_dict:
+            exif_dict["Exif"] = {}
+        exif_dict["Exif"][piexif.ExifIFD.MakerNote] = build_apple_makernote(asset_id)
+        exif_bytes = piexif.dump(exif_dict)
+        buf = io.BytesIO()
+        piexif.insert(exif_bytes, jpeg_bytes, buf)
+        return buf.getvalue()
+    except Exception:
+        return jpeg_bytes
 
 def fetch_data_from_tikwm(clean_url: str) -> dict:
     api_url = f"https://tikwm.com/api/?url={clean_url}"
@@ -229,13 +246,17 @@ def download_ios_mov(vid_url: str = Query(...), uuid_str: str = Query(...), file
     )
 
 @app.get("/api/download/ios-jpg")
-def download_ios_jpg(img_url: str = Query(...), filename: str = "livephoto.jpg"):
+def download_ios_jpg(img_url: str = Query(...), uuid_str: Optional[str] = Query(None), filename: str = "livephoto.jpg"):
     img_resp = requests.get(img_url, headers=HEADERS, impersonate="chrome120")
     if img_resp.status_code != 200:
         raise HTTPException(status_code=500, detail="Lỗi khi tải ảnh tĩnh")
         
+    content = img_resp.content
+    if uuid_str:
+        content = make_apple_jpg_bytes(content, uuid_str)
+
     return StreamingResponse(
-        io.BytesIO(img_resp.content),
+        io.BytesIO(content),
         media_type="image/jpeg",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
@@ -277,7 +298,8 @@ def download_zip(req: DownloadZipRequest):
                 asset_uuid = str(uuid.uuid4()).upper()
                 mov_bytes = make_apple_mov_bytes(vid_bytes, asset_uuid)
                 if img_bytes:
-                    zf.writestr(f"IMG_{pos:04d}.JPG", img_bytes)
+                    apple_jpg = make_apple_jpg_bytes(img_bytes, asset_uuid)
+                    zf.writestr(f"IMG_{pos:04d}.JPG", apple_jpg)
                 zf.writestr(f"IMG_{pos:04d}.MOV", mov_bytes)
                 
     zip_buffer.seek(0)
