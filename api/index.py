@@ -185,6 +185,14 @@ def parse_tiktok(req: ParseRequest):
     
     images = data.get("images", [])
     live_images = data.get("live_images", [])
+    is_story = bool(data.get("is_story"))
+
+    if not live_images and (is_story or data.get("play")):
+        cover = data.get("cover") or data.get("origin_cover") or ""
+        play = data.get("play") or ""
+        if play and cover:
+            images = [cover]
+            live_images = [play]
     
     items = []
     total = max(len(images), len(live_images))
@@ -213,6 +221,7 @@ def parse_tiktok(req: ParseRequest):
         "avatar": data.get("author", {}).get("avatar", ""),
         "total_live": len(items),
         "total_original_items": total,
+        "is_story": is_story,
         "items": items
     }
 
@@ -276,6 +285,13 @@ def download_zip(req: DownloadZipRequest):
     
     images = data.get("images", [])
     live_images = data.get("live_images", [])
+
+    if not live_images and (data.get("is_story") or data.get("play")):
+        cover = data.get("cover") or data.get("origin_cover") or ""
+        play = data.get("play") or ""
+        if play and cover:
+            images = [cover]
+            live_images = [play]
     
     selected_indices = req.indices if req.indices is not None else list(range(len(live_images)))
     
