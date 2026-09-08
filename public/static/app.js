@@ -175,7 +175,7 @@ function renderShowcase() {
 
     authorNickname.textContent = currentData.nickname || 'TikTok User';
     authorHandle.textContent = `@${currentData.author || 'tiktok'}`;
-    filterNotice.textContent = currentData.is_story ? '1 Nhật ký (Story)' : `${currentData.total_live} Live Photo`;
+    filterNotice.textContent = currentData.is_story ? '1 Nhật ký (Story)' : (currentData.is_single ? '1 Live Photo (Đơn lẻ)' : `${currentData.total_live} Live Photo`);
 
     buildThumbnailStrip();
     goToSlide(0);

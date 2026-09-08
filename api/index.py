@@ -358,12 +358,13 @@ def parse_tiktok(req: ParseRequest):
     clean_url = extract_clean_url(req.url)
     data = fetch_data_from_tikwm(clean_url)
     
-    images = data.get("images", [])
-    live_images = data.get("live_images", [])
+    images = data.get("images", []) or []
+    live_images = data.get("live_images", []) or []
     is_story = bool(data.get("is_story"))
+    is_single = bool(not images and not live_images and data.get("play"))
 
-    if not live_images and is_story:
-        cover = data.get("cover") or data.get("origin_cover") or ""
+    if not live_images and data.get("play"):
+        cover = data.get("origin_cover") or data.get("cover") or ""
         play = data.get("play") or ""
         if play and cover:
             images = [cover]
@@ -408,6 +409,7 @@ def parse_tiktok(req: ParseRequest):
         "total_live": len(items),
         "total_original_items": total,
         "is_story": is_story,
+        "is_single": is_single,
         "items": items
     }
 
@@ -472,11 +474,11 @@ def download_zip(req: DownloadZipRequest):
     clean_url = extract_clean_url(req.url)
     data = fetch_data_from_tikwm(clean_url)
     
-    images = data.get("images", [])
-    live_images = data.get("live_images", [])
+    images = data.get("images", []) or []
+    live_images = data.get("live_images", []) or []
 
-    if not live_images and data.get("is_story"):
-        cover = data.get("cover") or data.get("origin_cover") or ""
+    if not live_images and data.get("play"):
+        cover = data.get("origin_cover") or data.get("cover") or ""
         play = data.get("play") or ""
         if play and cover:
             images = [cover]
