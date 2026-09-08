@@ -1,7 +1,7 @@
 let currentData = null;
 let currentIndex = 0;
 let selectedIndices = new Set();
-let currentPlatform = 'ios';
+let currentPlatform = 'android';
 
 const urlInput = document.getElementById('urlInput');
 const pasteBtn = document.getElementById('pasteBtn');
@@ -84,12 +84,35 @@ urlInput.addEventListener('keydown', (e) => {
 
 submitBtn.addEventListener('click', handleParse);
 
+function detectUserPlatform() {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return isIOS ? 'ios' : 'android';
+}
+
+function setPlatform(platform) {
+    currentPlatform = platform;
+    document.querySelectorAll('.segment-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.platform === platform);
+    });
+    document.querySelectorAll('.modal-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === platform);
+    });
+    if (tabContentIos && tabContentAndroid) {
+        if (platform === 'ios') {
+            tabContentIos.style.display = 'flex';
+            tabContentAndroid.style.display = 'none';
+        } else {
+            tabContentIos.style.display = 'none';
+            tabContentAndroid.style.display = 'flex';
+        }
+    }
+    updatePlatformLabels();
+}
+
 document.querySelectorAll('.segment-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentPlatform = btn.dataset.platform;
-        updatePlatformLabels();
+        setPlatform(btn.dataset.platform);
         showToast(`Chế độ: ${currentPlatform === 'ios' ? 'Apple (iOS)' : 'Android'}`);
     });
 });
@@ -106,13 +129,7 @@ function updatePlatformLabels() {
     }
 }
 
-if (/android/i.test(navigator.userAgent)) {
-    currentPlatform = 'android';
-    document.querySelectorAll('.segment-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.platform === 'android');
-    });
-    updatePlatformLabels();
-}
+setPlatform(detectUserPlatform());
 
 async function handleParse() {
     const rawVal = urlInput.value.trim();
@@ -665,16 +682,7 @@ if (helpModal) {
 
 document.querySelectorAll('.modal-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        const target = tab.dataset.tab;
-        if (target === 'ios') {
-            if (tabContentIos) tabContentIos.style.display = 'flex';
-            if (tabContentAndroid) tabContentAndroid.style.display = 'none';
-        } else {
-            if (tabContentIos) tabContentIos.style.display = 'none';
-            if (tabContentAndroid) tabContentAndroid.style.display = 'flex';
-        }
+        setPlatform(tab.dataset.tab);
     });
 });
 
