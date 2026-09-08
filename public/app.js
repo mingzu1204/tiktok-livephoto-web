@@ -106,6 +106,14 @@ function updatePlatformLabels() {
     }
 }
 
+if (/android/i.test(navigator.userAgent)) {
+    currentPlatform = 'android';
+    document.querySelectorAll('.segment-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.platform === 'android');
+    });
+    updatePlatformLabels();
+}
+
 async function handleParse() {
     const rawVal = urlInput.value.trim();
     if (!rawVal) {
@@ -464,8 +472,8 @@ function downloadSingleItem(item, orderNumber) {
     const pad = String(orderNumber).padStart(2, '0');
     if (currentPlatform === 'android') {
         showToast(`Đang tải ảnh #${orderNumber}...`);
-        const url = `/api/download/android-file?img_url=${encodeURIComponent(item.image_url)}&vid_url=${encodeURIComponent(item.video_url)}&filename=LivePhoto_${pad}.jpg`;
-        triggerBrowserDownload(url, `LivePhoto_${pad}.jpg`);
+        const url = `/api/download/android-file?img_url=${encodeURIComponent(item.image_url)}&vid_url=${encodeURIComponent(item.video_url)}&filename=MVIMG_${pad}.jpg`;
+        triggerBrowserDownload(url, `MVIMG_${pad}.jpg`);
     } else {
         openIosDownloadModal(item, orderNumber);
     }

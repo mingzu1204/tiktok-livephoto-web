@@ -15,6 +15,7 @@ from typing import List, Optional
 
 import requests
 import piexif
+from PIL import Image
 from mutagen.mp4 import MP4, MP4FreeForm
 
 from fastapi import FastAPI, APIRouter, HTTPException, Query
@@ -245,6 +246,44 @@ def extract_clean_url(raw_text: str) -> str:
         raise HTTPException(status_code=400, detail="Không tìm thấy đường link hợp lệ trong nội dung đã nhập!")
     return match.group(0).strip()
 
+def ensure_jpeg_bytes(img_bytes: bytes) -> bytes:
+    if not img_bytes:
+        return b""
+    if img_bytes.startswith(b"\xff\xd8"):
+        return img_bytes
+    try:
+        im = Image.open(io.BytesIO(img_bytes))
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+    except Exception:
+        return img_bytes
+
+def create_samsung_motion_trailer_bytes(video_bytes: bytes):
+    trailer = bytearray()
+    marker = b"\x00\x00\x30\x0A"
+    trailer += marker
+    trailer += struct.pack("<I", 16)
+    trailer += b"MotionPhoto_Data"
+    video_offset_positive = len(trailer)
+    trailer += video_bytes
+    sef_offset = len(trailer)
+    trailer += b"SEFH"
+    trailer += struct.pack("<I", 106)
+    trailer += struct.pack("<I", 1)
+    negative_offset_from_sef = sef_offset
+    data_length = len(video_bytes) + 24
+    trailer += marker
+    trailer += struct.pack("<I", negative_offset_from_sef)
+    trailer += struct.pack("<I", data_length)
+    sef_data_size = len(trailer) - sef_offset
+    trailer += struct.pack("<I", sef_data_size)
+    trailer += b"SEFT"
+    video_offset_negative = len(trailer) - video_offset_positive
+    return bytes(trailer), video_offset_negative
+
 def insert_xmp(jpeg_bytes: bytes, video_size: int) -> bytes:
     xmp_xml = f'''<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">
@@ -255,11 +294,11 @@ def insert_xmp(jpeg_bytes: bytes, video_size: int) -> bytes:
     xmlns:Item="http://ns.google.com/photos/1.0/container/item/"
    GCamera:MotionPhoto="1"
    GCamera:MotionPhotoVersion="1"
-   GCamera:MotionPhotoPresentationTimestampUs="-1"
+   GCamera:MotionPhotoPresentationTimestampUs="0"
    GCamera:MicroVideo="1"
    GCamera:MicroVideoVersion="1"
    GCamera:MicroVideoOffset="{video_size}"
-   GCamera:MicroVideoPresentationTimestampUs="-1">
+   GCamera:MicroVideoPresentationTimestampUs="0">
    <Container:Directory>
     <rdf:Seq>
      <rdf:li rdf:parseType="Resource">
@@ -296,6 +335,11 @@ def insert_xmp(jpeg_bytes: bytes, video_size: int) -> bytes:
         
     return jpeg_bytes[:insert_idx] + app1_segment + jpeg_bytes[insert_idx:]
 
+def build_android_motion_photo(img_bytes: bytes, video_bytes: bytes) -> bytes:
+    jpeg_bytes = ensure_jpeg_bytes(img_bytes)
+    trailer_bytes, neg_offset = create_samsung_motion_trailer_bytes(video_bytes)
+    return insert_xmp(jpeg_bytes, neg_offset) + trailer_bytes
+
 def make_apple_mov_bytes(video_bytes: bytes, asset_id: str) -> bytes:
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         tmp.write(video_bytes)
@@ -325,6 +369,7 @@ def build_apple_makernote(uuid_str: str) -> bytes:
     return hdr + num_entries + entry + next_ifd + val
 
 def make_apple_jpg_bytes(jpeg_bytes: bytes, asset_id: str) -> bytes:
+    jpeg_bytes = ensure_jpeg_bytes(jpeg_bytes)
     try:
         try:
             exif_dict = piexif.load(jpeg_bytes)
@@ -423,7 +468,7 @@ def proxy_media(url: str = Query(...)):
     return StreamingResponse(resp.iter_content(chunk_size=65536), media_type=content_type)
 
 @router.get("/download/android-file")
-def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), filename: str = "livephoto.jpg"):
+def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), filename: str = "MVIMG_01.jpg"):
     img_resp = requests.get(img_url, headers=HEADERS)
     vid_resp = requests.get(vid_url, headers=HEADERS)
     
@@ -431,7 +476,7 @@ def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), 
         raise HTTPException(status_code=500, detail="Lỗi khi tải tài nguyên gốc từ TikTok")
         
     record_stat("android")
-    merged_bytes = insert_xmp(img_resp.content, len(vid_resp.content)) + vid_resp.content
+    merged_bytes = build_android_motion_photo(img_resp.content, vid_resp.content)
     return StreamingResponse(
         io.BytesIO(merged_bytes),
         media_type="image/jpeg",
@@ -459,7 +504,7 @@ def download_ios_jpg(img_url: str = Query(...), uuid_str: Optional[str] = Query(
         raise HTTPException(status_code=500, detail="Lỗi khi tải ảnh tĩnh")
         
     record_stat("ios_jpg")
-    content = img_resp.content
+    content = ensure_jpeg_bytes(img_resp.content)
     if uuid_str:
         content = make_apple_jpg_bytes(content, uuid_str)
 
@@ -507,8 +552,8 @@ def download_zip(req: DownloadZipRequest):
             
             if req.platform.lower() == "android":
                 if img_bytes:
-                    merged = insert_xmp(img_bytes, len(vid_bytes)) + vid_bytes
-                    zf.writestr(f"LivePhoto_{pos:02d}.jpg", merged)
+                    merged = build_android_motion_photo(img_bytes, vid_bytes)
+                    zf.writestr(f"MVIMG_{pos:04d}.jpg", merged)
             else:
                 asset_uuid = str(uuid.uuid4()).upper()
                 mov_bytes = make_apple_mov_bytes(vid_bytes, asset_uuid)
