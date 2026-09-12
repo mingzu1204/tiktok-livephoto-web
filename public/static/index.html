@@ -177,8 +177,12 @@
 
         <aside id="stickyActionDock" class="sticky-action-dock" style="display: none;">
             <div class="dock-inner">
-                <button type="button" id="selectAllToggleBtn" class="dock-select-toggle">
-                    <div class="toggle-tick" id="dockSelectIcon">✔</div>
+                <button type="button" id="selectAllToggleBtn" class="dock-select-toggle" title="Chọn tất cả">
+                    <div class="toggle-tick" id="dockSelectIcon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" width="11" height="11">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
                     <span id="dockSelectedCount">0 ảnh</span>
                 </button>
                 <div class="dock-buttons">
