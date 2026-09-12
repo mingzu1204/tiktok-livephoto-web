@@ -560,6 +560,14 @@ body {
     animation: livePulse 1.6s infinite ease-in-out;
 }
 
+.live-status-badge.is-video {
+    gap: 0;
+}
+
+.live-status-badge.is-video .live-status-dot {
+    display: none;
+}
+
 .live-play-hint {
     height: 26px;
     display: inline-flex;

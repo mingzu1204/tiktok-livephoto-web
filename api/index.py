@@ -431,30 +431,41 @@ def parse_tiktok(req: ParseRequest):
                 "is_live": is_live,
                 "title": f"Mục {i + 1}"
             })
-    elif video_source_url and (duration <= 15 or "#livephoto" in (data.get("title", "") or "").lower() or is_story):
-        post_type = "single_live"
-        items.append({
-            "index": 0,
-            "display_index": 1,
-            "image_url": cover,
-            "video_url": video_source_url,
-            "type": "live",
-            "is_live": True,
-            "duration": duration,
-            "title": "Live Photo"
-        })
     elif video_source_url:
-        post_type = "video"
-        items.append({
-            "index": 0,
-            "display_index": 1,
-            "image_url": cover,
-            "video_url": video_source_url,
-            "type": "video",
-            "is_live": False,
-            "duration": duration,
-            "title": "Video TikTok HD"
-        })
+        title_text = (data.get("title", "") or "").lower()
+        live_tags = [
+            "#livephoto", "#live_photo", "#motionphoto", "#motion_photo",
+            "#livewallpaper", "#live_wallpaper", "#anhdong", "#anhchuyendong", "#hinhnendong"
+        ]
+        live_phrases = ["live photo", "livephoto", "motion photo", "motionphoto", "live wallpaper"]
+        is_tagged_live = any(k in title_text for k in live_tags) or any(k in title_text for k in live_phrases)
+
+        if is_tagged_live:
+            post_type = "single_live"
+            items.append({
+                "index": 0,
+                "display_index": 1,
+                "image_url": cover,
+                "video_url": video_source_url,
+                "type": "live",
+                "is_live": True,
+                "is_tagged_live": True,
+                "duration": duration,
+                "title": data.get("title") or "Live Photo"
+            })
+        else:
+            post_type = "video"
+            items.append({
+                "index": 0,
+                "display_index": 1,
+                "image_url": cover,
+                "video_url": video_source_url,
+                "type": "video",
+                "is_live": False,
+                "is_tagged_live": False,
+                "duration": duration,
+                "title": data.get("title") or "Video TikTok HD"
+            })
         
     if not items:
         raise HTTPException(status_code=404, detail="Không tìm thấy nội dung hình ảnh hoặc video từ liên kết này!")
@@ -594,17 +605,18 @@ def download_zip(req: DownloadZipRequest):
                 "image_url": img_url,
                 "video_url": vid_url
             })
-    elif video_source_url and duration <= 6 and (data.get("title", "") and "#livephoto" in data.get("title", "").lower()):
-        items.append({
-            "index": 0,
-            "type": "live",
-            "image_url": cover,
-            "video_url": video_source_url
-        })
     elif video_source_url:
+        title_text = (data.get("title", "") or "").lower()
+        live_tags = [
+            "#livephoto", "#live_photo", "#motionphoto", "#motion_photo",
+            "#livewallpaper", "#live_wallpaper", "#anhdong", "#anhchuyendong", "#hinhnendong"
+        ]
+        live_phrases = ["live photo", "livephoto", "motion photo", "motionphoto", "live wallpaper"]
+        is_tagged_live = any(k in title_text for k in live_tags) or any(k in title_text for k in live_phrases)
+
         items.append({
             "index": 0,
-            "type": "video",
+            "type": "live" if is_tagged_live else "video",
             "image_url": cover,
             "video_url": video_source_url
         })

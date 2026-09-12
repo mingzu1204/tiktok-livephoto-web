@@ -133,9 +133,9 @@ function updatePlatformLabels() {
 
     const currentItem = currentData.items[currentIndex] || currentData.items[0];
     if (currentItem.type === 'video') {
-        quickDownloadText.textContent = 'Tải Video HD (Gốc siêu nét)';
-        mainDownloadBtnText.textContent = 'Tải Video HD';
-        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải Video HD';
+        quickDownloadText.textContent = 'Tải Video HD (.MP4)';
+        mainDownloadBtnText.textContent = 'Tải Video HD (.MP4)';
+        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải Video HD (.MP4)';
     } else if (currentItem.type === 'image') {
         quickDownloadText.textContent = 'Tải ảnh gốc siêu nét (.JPG)';
         mainDownloadBtnText.textContent = `Tải đã chọn (${currentPlatform === 'ios' ? 'iOS' : 'Android'})`;
@@ -286,7 +286,7 @@ function buildThumbnailStrip() {
         } else if (item.type === 'video') {
             const typeBadge = document.createElement('div');
             typeBadge.className = 'thumb-type-badge video';
-            typeBadge.textContent = '▶';
+            typeBadge.textContent = 'VIDEO';
             thumb.appendChild(typeBadge);
         }
 
@@ -322,16 +322,22 @@ function goToSlide(targetIdx) {
         showcaseVideo.muted = false;
         showcaseFrame.classList.add('is-video-item');
         showcaseFrame.classList.add('playing');
-        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveStatusBadge) {
+            liveStatusBadge.style.display = 'inline-flex';
+            liveStatusBadge.classList.add('is-video');
+        }
         if (liveBadgeText) liveBadgeText.textContent = 'VIDEO HD';
-        if (livePlayHint) livePlayHint.textContent = 'Phát video HD gốc';
+        if (livePlayHint) livePlayHint.textContent = '';
     } else if (item.type === 'image') {
         showcaseImage.src = `/api/proxy?url=${encodeURIComponent(item.image_url)}`;
         showcaseVideo.src = '';
         showcaseVideo.controls = false;
         showcaseFrame.classList.remove('is-video-item');
         showcaseFrame.classList.remove('playing');
-        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveStatusBadge) {
+            liveStatusBadge.style.display = 'inline-flex';
+            liveStatusBadge.classList.remove('is-video');
+        }
         if (liveBadgeText) liveBadgeText.textContent = 'ẢNH GỐC';
         if (livePlayHint) livePlayHint.textContent = 'Ảnh tĩnh siêu nét';
     } else {
@@ -341,7 +347,10 @@ function goToSlide(targetIdx) {
         showcaseVideo.muted = true;
         showcaseFrame.classList.remove('is-video-item');
         showcaseFrame.classList.remove('playing');
-        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveStatusBadge) {
+            liveStatusBadge.style.display = 'inline-flex';
+            liveStatusBadge.classList.remove('is-video');
+        }
         if (liveBadgeText) liveBadgeText.textContent = 'LIVE';
         if (livePlayHint) livePlayHint.textContent = isTouchDevice ? 'Chạm để xem Live' : 'Nhấn giữ để xem Live';
     }
@@ -350,6 +359,7 @@ function goToSlide(targetIdx) {
 
     const isChecked = selectedIndices.has(item.index);
     hudCheckBtn.classList.toggle('active', isChecked);
+    hudCheckBtn.title = item.type === 'video' ? 'Chọn video này' : 'Chọn ảnh này';
 
     document.querySelectorAll('.thumb-item').forEach((thumb, i) => {
         thumb.classList.toggle('active', i === currentIndex);
@@ -458,22 +468,28 @@ hudCheckBtn.addEventListener('click', (e) => {
 
 showcaseFrame.addEventListener('mousedown', (e) => {
     if (isTouchDevice) return;
-    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow')) return;
+    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow') || e.target.closest('video')) return;
+    const currentItem = currentData && currentData.items ? currentData.items[currentIndex] : null;
+    if (currentItem && currentItem.type === 'video') return;
     playLiveVideo();
 });
 
 window.addEventListener('mouseup', () => {
     if (isTouchDevice) return;
+    const currentItem = currentData && currentData.items ? currentData.items[currentIndex] : null;
+    if (currentItem && currentItem.type === 'video') return;
     stopLiveVideo();
 });
 
 function updateDockSelectionUI() {
     const total = currentData ? currentData.items.length : 0;
     const selectedCount = selectedIndices.size;
-    dockSelectedCount.textContent = `${selectedCount} / ${total} ảnh`;
+    const currentItem = currentData && currentData.items ? currentData.items[currentIndex] : null;
+    const unit = (currentItem && currentItem.type === 'video') ? 'video' : 'ảnh';
+    dockSelectedCount.textContent = `${selectedCount} / ${total} ${unit}`;
 
     if (desktopSelectedCount) {
-        desktopSelectedCount.textContent = `${selectedCount} / ${total} ảnh`;
+        desktopSelectedCount.textContent = `${selectedCount} / ${total} ${unit}`;
     }
     if (desktopSelectAllText) {
         desktopSelectAllText.textContent = (selectedCount === total && total > 0) ? 'Bỏ chọn tất cả' : 'Chọn tất cả';
