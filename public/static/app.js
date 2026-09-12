@@ -118,14 +118,38 @@ document.querySelectorAll('.segment-btn').forEach(btn => {
 });
 
 function updatePlatformLabels() {
-    if (currentPlatform === 'ios') {
-        quickDownloadText.textContent = 'Tải ảnh này về (iOS)';
-        mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (iOS)';
-        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (iOS)';
+    if (!currentData || !currentData.items || !currentData.items.length) {
+        if (currentPlatform === 'ios') {
+            quickDownloadText.textContent = 'Tải ảnh này về (iOS)';
+            mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (iOS)';
+            if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (iOS)';
+        } else {
+            quickDownloadText.textContent = 'Tải ảnh này về (Android)';
+            mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (Android)';
+            if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (Android)';
+        }
+        return;
+    }
+
+    const currentItem = currentData.items[currentIndex] || currentData.items[0];
+    if (currentItem.type === 'video') {
+        quickDownloadText.textContent = 'Tải Video HD (Gốc siêu nét)';
+        mainDownloadBtnText.textContent = 'Tải Video HD';
+        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải Video HD';
+    } else if (currentItem.type === 'image') {
+        quickDownloadText.textContent = 'Tải ảnh gốc siêu nét (.JPG)';
+        mainDownloadBtnText.textContent = `Tải đã chọn (${currentPlatform === 'ios' ? 'iOS' : 'Android'})`;
+        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = `Tải ảnh đã chọn (${currentPlatform.toUpperCase()})`;
     } else {
-        quickDownloadText.textContent = 'Tải ảnh này về (Android)';
-        mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (Android)';
-        if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (Android)';
+        if (currentPlatform === 'ios') {
+            quickDownloadText.textContent = 'Tải ảnh này về (iOS)';
+            mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (iOS)';
+            if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (iOS)';
+        } else {
+            quickDownloadText.textContent = 'Tải ảnh này về (Android)';
+            mainDownloadBtnText.textContent = 'Tải ảnh đã chọn (Android)';
+            if (desktopDownloadSelectedText) desktopDownloadSelectedText.textContent = 'Tải ảnh đã chọn (Android)';
+        }
     }
 }
 
@@ -200,7 +224,22 @@ function renderShowcase() {
 
     authorNickname.textContent = currentData.nickname || 'TikTok User';
     authorHandle.textContent = `@${currentData.author || 'tiktok'}`;
-    filterNotice.textContent = currentData.is_story ? '1 Nhật ký (Story)' : (currentData.is_single ? '1 Live Photo (Đơn lẻ)' : `${currentData.total_live} Live Photo`);
+
+    if (currentData.post_type === 'video') {
+        filterNotice.textContent = `1 Video HD (${currentData.duration || 0}s)`;
+    } else if (currentData.post_type === 'single_live') {
+        filterNotice.textContent = '1 Live Photo (Đơn lẻ)';
+    } else {
+        const liveCount = currentData.total_live || 0;
+        const imgCount = currentData.total_images || 0;
+        if (liveCount > 0 && imgCount > 0) {
+            filterNotice.textContent = `${liveCount} Live Photo + ${imgCount} Ảnh`;
+        } else if (liveCount > 0) {
+            filterNotice.textContent = `${liveCount} Live Photo`;
+        } else {
+            filterNotice.textContent = `${currentData.items.length} Ảnh gốc`;
+        }
+    }
 
     buildThumbnailStrip();
     goToSlide(0);
@@ -214,22 +253,42 @@ function renderShowcase() {
 
 function buildThumbnailStrip() {
     thumbnailStrip.innerHTML = '';
+    const stripShell = document.querySelector('.thumbnail-strip-shell');
+    if (currentData.items.length <= 1) {
+        if (stripShell) stripShell.style.display = 'none';
+        return;
+    } else {
+        if (stripShell) stripShell.style.display = 'block';
+    }
+
     currentData.items.forEach((item, idx) => {
         const thumb = document.createElement('div');
         thumb.className = `thumb-item ${idx === 0 ? 'active' : ''} ${selectedIndices.has(item.index) ? 'checked' : ''}`;
         thumb.dataset.slideIndex = idx;
 
         const img = document.createElement('img');
-        img.src = `/api/proxy?url=${encodeURIComponent(item.image_url)}`;
+        img.src = item.image_url ? `/api/proxy?url=${encodeURIComponent(item.image_url)}` : '';
         img.loading = 'lazy';
 
         const tick = document.createElement('div');
         tick.className = 'thumb-tick-badge';
-        tick.textContent = '✔';
+        tick.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" width="10" height="10"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
         const num = document.createElement('div');
         num.className = 'thumb-num';
         num.textContent = `${idx + 1}`;
+
+        if (item.type === 'live') {
+            const typeBadge = document.createElement('div');
+            typeBadge.className = 'thumb-type-badge live';
+            typeBadge.textContent = 'LIVE';
+            thumb.appendChild(typeBadge);
+        } else if (item.type === 'video') {
+            const typeBadge = document.createElement('div');
+            typeBadge.className = 'thumb-type-badge video';
+            typeBadge.textContent = '▶';
+            thumb.appendChild(typeBadge);
+        }
 
         thumb.appendChild(img);
         thumb.appendChild(tick);
@@ -252,8 +311,40 @@ function goToSlide(targetIdx) {
     const item = currentData.items[currentIndex];
 
     stopLiveVideo();
-    showcaseImage.src = `/api/proxy?url=${encodeURIComponent(item.image_url)}`;
-    showcaseVideo.src = `/api/proxy?url=${encodeURIComponent(item.video_url)}`;
+
+    const liveStatusBadge = document.querySelector('.live-status-badge');
+    const liveBadgeText = liveStatusBadge ? liveStatusBadge.querySelector('span:last-child') : null;
+
+    if (item.type === 'video') {
+        showcaseImage.src = item.image_url ? `/api/proxy?url=${encodeURIComponent(item.image_url)}` : '';
+        showcaseVideo.src = `/api/proxy?url=${encodeURIComponent(item.video_url)}`;
+        showcaseVideo.controls = true;
+        showcaseVideo.muted = false;
+        showcaseFrame.classList.add('is-video-item');
+        showcaseFrame.classList.add('playing');
+        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveBadgeText) liveBadgeText.textContent = 'VIDEO HD';
+        if (livePlayHint) livePlayHint.textContent = 'Phát video HD gốc';
+    } else if (item.type === 'image') {
+        showcaseImage.src = `/api/proxy?url=${encodeURIComponent(item.image_url)}`;
+        showcaseVideo.src = '';
+        showcaseVideo.controls = false;
+        showcaseFrame.classList.remove('is-video-item');
+        showcaseFrame.classList.remove('playing');
+        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveBadgeText) liveBadgeText.textContent = 'ẢNH GỐC';
+        if (livePlayHint) livePlayHint.textContent = 'Ảnh tĩnh siêu nét';
+    } else {
+        showcaseImage.src = `/api/proxy?url=${encodeURIComponent(item.image_url)}`;
+        showcaseVideo.src = `/api/proxy?url=${encodeURIComponent(item.video_url)}`;
+        showcaseVideo.controls = false;
+        showcaseVideo.muted = true;
+        showcaseFrame.classList.remove('is-video-item');
+        showcaseFrame.classList.remove('playing');
+        if (liveStatusBadge) liveStatusBadge.style.display = 'inline-flex';
+        if (liveBadgeText) liveBadgeText.textContent = 'LIVE';
+        if (livePlayHint) livePlayHint.textContent = isTouchDevice ? 'Chạm để xem Live' : 'Nhấn giữ để xem Live';
+    }
 
     hudCounter.textContent = `${String(currentIndex + 1).padStart(2, '0')} / ${String(currentData.items.length).padStart(2, '0')}`;
 
@@ -268,6 +359,8 @@ function goToSlide(targetIdx) {
     if (activeThumb) {
         activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     }
+
+    updatePlatformLabels();
 }
 
 prevSlideBtn.addEventListener('click', (e) => {
@@ -312,13 +405,16 @@ let touchStartX = 0;
 let touchStartY = 0;
 
 showcaseFrame.addEventListener('touchstart', (e) => {
-    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow')) return;
+    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow') || e.target.closest('video[controls]')) return;
     touchStartX = e.changedTouches[0].screenX;
     touchStartY = e.changedTouches[0].screenY;
 }, { passive: true });
 
 showcaseFrame.addEventListener('touchend', (e) => {
-    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow')) return;
+    if (e.target.closest('.hud-check-btn') || e.target.closest('.nav-arrow') || e.target.closest('video[controls]')) return;
+    const currentItem = currentData && currentData.items[currentIndex];
+    if (currentItem && currentItem.type === 'video') return;
+
     const touchEndX = e.changedTouches[0].screenX;
     const touchEndY = e.changedTouches[0].screenY;
     const diffX = touchEndX - touchStartX;
@@ -331,10 +427,12 @@ showcaseFrame.addEventListener('touchend', (e) => {
             goToSlide(currentIndex - 1);
         }
     } else if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) {
-        if (isLivePlaying) {
-            stopLiveVideo();
-        } else {
-            playLiveVideo();
+        if (currentItem && currentItem.type === 'live') {
+            if (isLivePlaying) {
+                stopLiveVideo();
+            } else {
+                playLiveVideo();
+            }
         }
     }
 }, { passive: true });
@@ -487,12 +585,22 @@ function openIosDownloadModal(item, orderNumber) {
 
 function downloadSingleItem(item, orderNumber) {
     const pad = String(orderNumber).padStart(2, '0');
-    if (currentPlatform === 'android') {
-        showToast(`Đang tải ảnh #${orderNumber}...`);
-        const url = `/api/download/android-file?img_url=${encodeURIComponent(item.image_url)}&vid_url=${encodeURIComponent(item.video_url)}&filename=MVIMG_${pad}.jpg`;
-        triggerBrowserDownload(url, `MVIMG_${pad}.jpg`);
+    if (item.type === 'video') {
+        showToast(`Đang tải Video HD #${orderNumber}...`);
+        const url = `/api/download/video?vid_url=${encodeURIComponent(item.video_url)}&filename=VIDEO_${pad}.mp4`;
+        triggerBrowserDownload(url, `VIDEO_${pad}.mp4`);
+    } else if (item.type === 'image') {
+        showToast(`Đang tải ảnh gốc #${orderNumber}...`);
+        const url = `/api/download/image?img_url=${encodeURIComponent(item.image_url)}&filename=IMG_${pad}.jpg`;
+        triggerBrowserDownload(url, `IMG_${pad}.jpg`);
     } else {
-        openIosDownloadModal(item, orderNumber);
+        if (currentPlatform === 'android') {
+            showToast(`Đang tải Live Photo #${orderNumber}...`);
+            const url = `/api/download/android-file?img_url=${encodeURIComponent(item.image_url)}&vid_url=${encodeURIComponent(item.video_url)}&filename=MVIMG_${pad}.jpg`;
+            triggerBrowserDownload(url, `MVIMG_${pad}.jpg`);
+        } else {
+            openIosDownloadModal(item, orderNumber);
+        }
     }
 }
 
@@ -583,29 +691,32 @@ downloadCurrentBtn.addEventListener('click', () => {
 
 downloadSelectedBtn.addEventListener('click', () => {
     if (!currentData || selectedIndices.size === 0) {
-        showToast('Chưa chọn ảnh nào!');
+        showToast('Chưa chọn mục nào!');
         return;
     }
 
     const selectedItems = currentData.items.filter(i => selectedIndices.has(i.index));
+    if (selectedItems.length === 1) {
+        downloadSingleItem(selectedItems[0], selectedItems[0].display_index);
+        return;
+    }
+
     if (currentPlatform === 'ios') {
-        if (selectedItems.length === 1) {
-            openIosDownloadModal(selectedItems[0], selectedItems[0].display_index);
-            return;
-        } else {
+        const hasLive = selectedItems.some(it => it.type === 'live');
+        if (hasLive) {
             downloadZipBtn.click();
-            showToast('Trên iOS, đã tự động nén ZIP để Safari không chặn tải nhiều file!', 3200);
+            showToast('Đã tự động nén ZIP để Safari tải trọn bộ!', 3200);
             return;
         }
     }
 
-    showToast(`Bắt đầu tải ${selectedItems.length} ảnh...`);
+    showToast(`Bắt đầu tải ${selectedItems.length} mục...`);
     let delay = 0;
     selectedItems.forEach(item => {
         setTimeout(() => {
             downloadSingleItem(item, item.display_index);
         }, delay);
-        delay += 700;
+        delay += 600;
     });
 });
 
@@ -613,11 +724,11 @@ downloadZipBtn.addEventListener('click', async () => {
     if (!currentData) return;
     const indices = Array.from(selectedIndices);
     if (indices.length === 0) {
-        showToast('Vui lòng chọn ít nhất 1 ảnh!');
+        showToast('Vui lòng chọn ít nhất 1 mục!');
         return;
     }
 
-    showToast('Đang tạo file ZIP...');
+    showToast('Đang tạo file ZIP trọn bộ...');
     try {
         const resp = await fetch('/api/download/zip', {
             method: 'POST',
@@ -633,7 +744,7 @@ downloadZipBtn.addEventListener('click', async () => {
 
         const blob = await resp.blob();
         const downloadUrl = window.URL.createObjectURL(blob);
-        const filename = `TikTok_LivePhoto_${currentPlatform.toUpperCase()}_${currentData.id}.zip`;
+        const filename = `TikTok_${currentData.id || 'media'}_${currentPlatform.toUpperCase()}.zip`;
         triggerBrowserDownload(downloadUrl, filename);
         window.URL.revokeObjectURL(downloadUrl);
         showToast('Đã tải xong file ZIP!');

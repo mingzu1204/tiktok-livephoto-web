@@ -453,6 +453,15 @@ body {
     opacity: 0;
 }
 
+.showcase-media-frame.is-video-item .active-video {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.showcase-media-frame.is-video-item .active-image {
+    opacity: 0;
+}
+
 .slide-hud-top {
     position: absolute;
     top: 10px;
@@ -719,6 +728,28 @@ body {
     padding: 1px 4px;
     border-radius: 3px;
     line-height: 1.2;
+}
+
+.thumb-type-badge {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    z-index: 2;
+}
+
+.thumb-type-badge.live {
+    background: var(--brand-cyan);
+    color: #000;
+}
+
+.thumb-type-badge.video {
+    background: var(--brand-tiktok);
+    color: #fff;
 }
 
 .sticky-action-dock {

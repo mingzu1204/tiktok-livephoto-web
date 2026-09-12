@@ -256,7 +256,7 @@ def ensure_jpeg_bytes(img_bytes: bytes) -> bytes:
         if im.mode not in ("RGB", "L"):
             im = im.convert("RGB")
         buf = io.BytesIO()
-        im.save(buf, format="JPEG", quality=95)
+        im.save(buf, format="JPEG", quality=100, subsampling=0)
         return buf.getvalue()
     except Exception:
         return img_bytes
@@ -386,7 +386,7 @@ def make_apple_jpg_bytes(jpeg_bytes: bytes, asset_id: str) -> bytes:
         return jpeg_bytes
 
 def fetch_data_from_tikwm(clean_url: str) -> dict:
-    api_url = f"https://tikwm.com/api/?url={clean_url}"
+    api_url = f"https://tikwm.com/api/?url={clean_url}&hd=1"
     resp = requests.get(api_url, headers={"User-Agent": HEADERS["User-Agent"]})
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Không thể kết nối đến máy chủ phân tích (HTTP {resp.status_code})")
@@ -406,34 +406,62 @@ def parse_tiktok(req: ParseRequest):
     images = data.get("images", []) or []
     live_images = data.get("live_images", []) or []
     is_story = bool(data.get("is_story"))
-    is_single = bool(not images and not live_images and data.get("play"))
-
-    if not live_images and data.get("play"):
-        cover = data.get("origin_cover") or data.get("cover") or ""
-        play = data.get("play") or ""
-        if play and cover:
-            images = [cover]
-            live_images = [play]
+    duration = data.get("duration") or 0
+    hdplay = data.get("hdplay") or ""
+    play = data.get("play") or ""
+    video_source_url = hdplay if hdplay else play
+    cover = data.get("origin_cover") or data.get("cover") or ""
     
     items = []
-    total = max(len(images), len(live_images))
-    for i in range(total):
-        if i < len(live_images) and live_images[i]:
-            img_url = images[i] if i < len(images) else ""
-            vid_url = live_images[i]
+    post_type = "slideshow"
+    
+    if images:
+        post_type = "slideshow"
+        total = len(images)
+        for i in range(total):
+            img_url = images[i]
+            vid_url = live_images[i] if (i < len(live_images) and live_images[i]) else ""
+            is_live = bool(vid_url)
             items.append({
                 "index": i,
                 "display_index": i + 1,
                 "image_url": img_url,
                 "video_url": vid_url,
-                "is_live": True
+                "type": "live" if is_live else "image",
+                "is_live": is_live,
+                "title": f"Mục {i + 1}"
             })
-            
+    elif video_source_url and (duration <= 15 or "#livephoto" in (data.get("title", "") or "").lower() or is_story):
+        post_type = "single_live"
+        items.append({
+            "index": 0,
+            "display_index": 1,
+            "image_url": cover,
+            "video_url": video_source_url,
+            "type": "live",
+            "is_live": True,
+            "duration": duration,
+            "title": "Live Photo"
+        })
+    elif video_source_url:
+        post_type = "video"
+        items.append({
+            "index": 0,
+            "display_index": 1,
+            "image_url": cover,
+            "video_url": video_source_url,
+            "type": "video",
+            "is_live": False,
+            "duration": duration,
+            "title": "Video TikTok HD"
+        })
+        
     if not items:
-        dur = data.get("duration", 0)
-        if dur and dur > 0:
-            raise HTTPException(status_code=404, detail=f"Liên kết này là Video TikTok thông thường ({dur} giây), không phải bài đăng Live Photo! Apple chỉ hỗ trợ Live Photo từ album ảnh động (1.5 - 3 giây).")
-        raise HTTPException(status_code=404, detail="Bài đăng này không chứa bất kỳ ảnh Live Photo nào! Có thể đây là bài đăng ảnh tĩnh hoặc video thông thường.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy nội dung hình ảnh hoặc video từ liên kết này!")
+
+    total_live = sum(1 for it in items if it.get("is_live"))
+    total_images = sum(1 for it in items if it.get("type") == "image")
+    total_videos = sum(1 for it in items if it.get("type") == "video")
 
     record_stat("parse", {
         "url": clean_url,
@@ -451,10 +479,13 @@ def parse_tiktok(req: ParseRequest):
         "author": data.get("author", {}).get("unique_id", ""),
         "nickname": data.get("author", {}).get("nickname", ""),
         "avatar": data.get("author", {}).get("avatar", ""),
-        "total_live": len(items),
-        "total_original_items": total,
+        "post_type": post_type,
+        "total_items": len(items),
+        "total_live": total_live,
+        "total_images": total_images,
+        "total_videos": total_videos,
         "is_story": is_story,
-        "is_single": is_single,
+        "duration": duration,
         "items": items
     }
 
@@ -466,6 +497,30 @@ def proxy_media(url: str = Query(...)):
         
     content_type = resp.headers.get("content-type", "application/octet-stream")
     return StreamingResponse(resp.iter_content(chunk_size=65536), media_type=content_type)
+
+@router.get("/download/video")
+def download_video(vid_url: str = Query(...), filename: str = "tiktok_video_hd.mp4"):
+    record_stat("total_downloads")
+    resp = requests.get(vid_url, headers=HEADERS, stream=True)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Không thể tải video nguồn từ máy chủ TikTok")
+    return StreamingResponse(
+        resp.iter_content(chunk_size=65536),
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@router.get("/download/image")
+def download_image(img_url: str = Query(...), filename: str = "tiktok_image.jpg"):
+    record_stat("total_downloads")
+    resp = requests.get(img_url, headers=HEADERS, stream=True)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=500, detail="Không thể tải ảnh nguồn từ máy chủ TikTok")
+    return StreamingResponse(
+        resp.iter_content(chunk_size=65536),
+        media_type="image/jpeg",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 @router.get("/download/android-file")
 def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), filename: str = "MVIMG_01.jpg"):
@@ -521,50 +576,84 @@ def download_zip(req: DownloadZipRequest):
     
     images = data.get("images", []) or []
     live_images = data.get("live_images", []) or []
+    hdplay = data.get("hdplay") or ""
+    play = data.get("play") or ""
+    video_source_url = hdplay if hdplay else play
+    cover = data.get("origin_cover") or data.get("cover") or ""
+    duration = data.get("duration") or 0
 
-    if not live_images and data.get("play"):
-        cover = data.get("origin_cover") or data.get("cover") or ""
-        play = data.get("play") or ""
-        if play and cover:
-            images = [cover]
-            live_images = [play]
-    
-    selected_indices = req.indices if req.indices is not None else list(range(len(live_images)))
+    items = []
+    if images:
+        for i in range(len(images)):
+            img_url = images[i]
+            vid_url = live_images[i] if (i < len(live_images) and live_images[i]) else ""
+            is_live = bool(vid_url)
+            items.append({
+                "index": i,
+                "type": "live" if is_live else "image",
+                "image_url": img_url,
+                "video_url": vid_url
+            })
+    elif video_source_url and duration <= 6 and (data.get("title", "") and "#livephoto" in data.get("title", "").lower()):
+        items.append({
+            "index": 0,
+            "type": "live",
+            "image_url": cover,
+            "video_url": video_source_url
+        })
+    elif video_source_url:
+        items.append({
+            "index": 0,
+            "type": "video",
+            "image_url": cover,
+            "video_url": video_source_url
+        })
+
+    selected_indices = req.indices if req.indices is not None else [it["index"] for it in items]
+    selected_set = set(selected_indices)
     
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for idx in selected_indices:
-            if idx >= len(live_images) or not live_images[idx]:
+        for idx, item in enumerate(items):
+            if item["index"] not in selected_set:
                 continue
-                
             pos = idx + 1
-            vid_url = live_images[idx]
-            img_url = images[idx] if idx < len(images) else ""
-            
-            img_resp = requests.get(img_url, headers=HEADERS) if img_url else None
-            vid_resp = requests.get(vid_url, headers=HEADERS)
-            
-            if not vid_resp or vid_resp.status_code != 200:
-                continue
-                
-            img_bytes = img_resp.content if (img_resp and img_resp.status_code == 200) else b""
-            vid_bytes = vid_resp.content
-            
-            if req.platform.lower() == "android":
-                if img_bytes:
-                    merged = build_android_motion_photo(img_bytes, vid_bytes)
-                    zf.writestr(f"MVIMG_{pos:04d}.jpg", merged)
-            else:
-                asset_uuid = str(uuid.uuid4()).upper()
-                mov_bytes = make_apple_mov_bytes(vid_bytes, asset_uuid)
-                if img_bytes:
-                    apple_jpg = make_apple_jpg_bytes(img_bytes, asset_uuid)
-                    zf.writestr(f"IMG_{pos:04d}.JPG", apple_jpg)
-                zf.writestr(f"IMG_{pos:04d}.MOV", mov_bytes)
-                
+            item_type = item.get("type", "image")
+            img_url = item.get("image_url", "")
+            vid_url = item.get("video_url", "")
+
+            if item_type == "video":
+                vid_resp = requests.get(vid_url, headers=HEADERS)
+                if vid_resp and vid_resp.status_code == 200:
+                    zf.writestr(f"VIDEO_{pos:04d}.mp4", vid_resp.content)
+            elif item_type == "image":
+                img_resp = requests.get(img_url, headers=HEADERS)
+                if img_resp and img_resp.status_code == 200:
+                    zf.writestr(f"IMG_{pos:04d}.jpg", img_resp.content)
+            elif item_type == "live":
+                img_resp = requests.get(img_url, headers=HEADERS) if img_url else None
+                vid_resp = requests.get(vid_url, headers=HEADERS) if vid_url else None
+                img_bytes = img_resp.content if (img_resp and img_resp.status_code == 200) else b""
+                vid_bytes = vid_resp.content if (vid_resp and vid_resp.status_code == 200) else b""
+
+                if req.platform.lower() == "android":
+                    if img_bytes and vid_bytes:
+                        merged = build_android_motion_photo(img_bytes, vid_bytes)
+                        zf.writestr(f"MVIMG_{pos:04d}.jpg", merged)
+                    elif img_bytes:
+                        zf.writestr(f"IMG_{pos:04d}.jpg", img_bytes)
+                else:
+                    asset_uuid = str(uuid.uuid4()).upper()
+                    if vid_bytes:
+                        mov_bytes = make_apple_mov_bytes(vid_bytes, asset_uuid)
+                        zf.writestr(f"IMG_{pos:04d}.MOV", mov_bytes)
+                    if img_bytes:
+                        apple_jpg = make_apple_jpg_bytes(img_bytes, asset_uuid)
+                        zf.writestr(f"IMG_{pos:04d}.JPG", apple_jpg)
+
     record_stat("zip")
     zip_buffer.seek(0)
-    filename = f"TikTok_LivePhoto_{req.platform.upper()}_{data.get('id', 'media')}.zip"
+    filename = f"TikTok_{data.get('id', 'media')}_{req.platform.upper()}.zip"
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
