@@ -318,11 +318,11 @@
 
             <!-- Studio Editing Workspace (shown when both image and video are loaded) -->
             <div id="creatorStudioWorkspace" class="creator-studio-workspace" style="display: none;">
-                <!-- Studio Preview & Live Showcase -->
+                <!-- 1. Unified Preview Stage -->
                 <div class="creator-preview-card">
                     <div class="creator-stage-header">
                         <span class="stage-title">Xem trước Live Photo</span>
-                        <span class="stage-hint" id="stageInteractionHint">Chạm hoặc nhấn giữ ảnh để xem chuyển động</span>
+                        <span class="stage-hint" id="stageInteractionHint">Chạm giữ ảnh để xem chuyển động</span>
                     </div>
 
                     <div class="creator-stage-frame" id="creatorStageFrame">
@@ -357,8 +357,116 @@
                     </div>
                 </div>
 
-                <!-- Video Crop Section -->
-                <div id="videoCropSection" class="creator-crop-card">
+                <!-- 2. Clean Studio Tool Selector Bar (TikTok / CapCut style) -->
+                <div class="studio-tools-nav" id="studioToolsNav">
+                    <button type="button" class="studio-tool-tab active" data-tool="trim">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <circle cx="6" cy="6" r="3"></circle>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                            <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                            <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                        </svg>
+                        <span>Cắt đoạn (Trim)</span>
+                    </button>
+                    <button type="button" class="studio-tool-tab" data-tool="crop">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"></path>
+                            <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"></path>
+                        </svg>
+                        <span>Khung (Crop)</span>
+                    </button>
+                    <button type="button" class="studio-tool-tab" data-tool="color">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        <span>Màu sắc</span>
+                    </button>
+                    <button type="button" class="studio-tool-tab" data-tool="compress">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <polyline points="4 14 10 14 10 20"></polyline>
+                            <polyline points="20 10 14 10 14 4"></polyline>
+                            <line x1="14" y1="10" x2="21" y2="3"></line>
+                            <line x1="3" y1="21" x2="10" y2="14"></line>
+                        </svg>
+                        <span>Độ nén</span>
+                    </button>
+                </div>
+
+                <!-- 3. Tool Panels (Only active panel displays at a time!) -->
+
+                <!-- Panel 1: Video Trimmer -->
+                <div class="studio-tool-panel active" id="toolPanelTrim">
+                    <div class="section-title-strip">
+                        <div class="strip-left">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+                                <circle cx="6" cy="6" r="3"></circle>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                                <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                                <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                            </svg>
+                            <h3>Cắt thời lượng Video (Trim)</h3>
+                        </div>
+                        <span class="strip-badge" id="trimDurationBadge">2.5s</span>
+                    </div>
+
+                    <div class="trimmer-card">
+                        <div class="trim-time-row">
+                            <div class="trim-time-block">
+                                <span class="trim-label">Bắt đầu:</span>
+                                <strong id="trimStartVal">00:00.0</strong>
+                            </div>
+                            <div class="trim-time-block center">
+                                <span class="trim-label">Thời lượng Live:</span>
+                                <strong id="trimTotalVal" class="highlight">2.5s</strong>
+                            </div>
+                            <div class="trim-time-block right">
+                                <span class="trim-label">Kết thúc:</span>
+                                <strong id="trimEndVal">00:02.5</strong>
+                            </div>
+                        </div>
+
+                        <!-- Sliders for Start & End -->
+                        <div class="trim-slider-group">
+                            <div class="trim-slider-row">
+                                <span class="slider-side-label">Điểm đầu:</span>
+                                <input type="range" id="trimStartSlider" min="0" max="100" value="0" step="0.1" class="trim-slider">
+                            </div>
+                            <div class="trim-slider-row">
+                                <span class="slider-side-label">Điểm cuối:</span>
+                                <input type="range" id="trimEndSlider" min="0" max="100" value="100" step="0.1" class="trim-slider">
+                            </div>
+                        </div>
+
+                        <!-- Quick Presets -->
+                        <div class="trim-quick-presets">
+                            <span class="preset-label">Độ dài nhanh:</span>
+                            <div class="preset-btn-group">
+                                <button type="button" class="preset-ratio-btn trim-preset-btn" data-dur="1.5">1.5s</button>
+                                <button type="button" class="preset-ratio-btn trim-preset-btn" data-dur="2.0">2.0s</button>
+                                <button type="button" class="preset-ratio-btn trim-preset-btn active" data-dur="2.5">2.5s</button>
+                                <button type="button" class="preset-ratio-btn trim-preset-btn" data-dur="3.0">3.0s</button>
+                                <button type="button" class="preset-ratio-btn trim-preset-btn" data-dur="full">Toàn bộ</button>
+                            </div>
+                        </div>
+
+                        <div class="trim-hint-box">
+                            <span>💡 <strong>Mẹo hay:</strong> Live Photo chạy mượt và nhanh nhất ở độ dài từ <strong>1.5s – 3s</strong>. Hãy cắt bớt đoạn thừa trước khi xuất ảnh.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Video Crop Section -->
+                <div class="studio-tool-panel" id="toolPanelCrop">
                     <div class="section-title-strip">
                         <div class="strip-left">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
@@ -422,8 +530,8 @@
                     </div>
                 </div>
 
-                <!-- Color Adjustments Section (Separate for Image and Video) -->
-                <div class="creator-adjustments-card">
+                <!-- Panel 3: Color Adjustments Section (Separate for Image and Video) -->
+                <div class="studio-tool-panel" id="toolPanelColor">
                     <div class="section-title-strip">
                         <div class="strip-left">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
@@ -529,8 +637,8 @@
                     </div>
                 </div>
 
-                <!-- Video Compression Setting -->
-                <div class="creator-compression-card">
+                <!-- Panel 4: Video Compression Setting -->
+                <div class="studio-tool-panel" id="toolPanelCompress">
                     <div class="section-title-strip">
                         <div class="strip-left">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
@@ -566,7 +674,7 @@
                     </div>
                 </div>
 
-                <!-- Export Action Card -->
+                <!-- 4. Export Action Card -->
                 <div class="creator-export-card">
                     <button type="button" id="exportAndroidBtn" class="main-export-btn">
                         <div class="btn-inner">

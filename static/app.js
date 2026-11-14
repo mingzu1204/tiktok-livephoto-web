@@ -1068,6 +1068,10 @@ document.addEventListener('keydown', (e) => {
     let activeCropRatio = 'original'; // 'original', '9:16', '16:9', '1:1', '4:3', '3:4', 'free'
     let cropBoxNorm = { x: 0, y: 0, w: 1, h: 1 };
 
+    // Video Trimmer State (seconds)
+    let trimStart = 0;
+    let trimEnd = 2.5;
+
     // Elements
     const creatorImageFile = document.getElementById('creatorImageFile');
     const creatorVideoFile = document.getElementById('creatorVideoFile');
@@ -1143,6 +1147,103 @@ document.addEventListener('keydown', (e) => {
     const exportProgressBox = document.getElementById('exportProgressBox');
     const exportProgressFill = document.getElementById('exportProgressFill');
     const exportProgressMsg = document.getElementById('exportProgressMsg');
+
+    // Studio Segmented Tool Navigation (CapCut / TikTok Studio style)
+    const studioToolTabs = document.querySelectorAll('.studio-tool-tab');
+    const studioToolPanels = {
+        trim: document.getElementById('toolPanelTrim'),
+        crop: document.getElementById('toolPanelCrop'),
+        color: document.getElementById('toolPanelColor'),
+        compress: document.getElementById('toolPanelCompress')
+    };
+
+    studioToolTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tool = tab.dataset.tool;
+            studioToolTabs.forEach(t => t.classList.toggle('active', t === tab));
+            Object.keys(studioToolPanels).forEach(key => {
+                if (studioToolPanels[key]) {
+                    studioToolPanels[key].classList.toggle('active', key === tool);
+                }
+            });
+        });
+    });
+
+    // Video Trimmer elements
+    const trimStartSlider = document.getElementById('trimStartSlider');
+    const trimEndSlider = document.getElementById('trimEndSlider');
+    const trimStartVal = document.getElementById('trimStartVal');
+    const trimEndVal = document.getElementById('trimEndVal');
+    const trimTotalVal = document.getElementById('trimTotalVal');
+    const trimDurationBadge = document.getElementById('trimDurationBadge');
+    const trimPresetBtns = document.querySelectorAll('.trim-preset-btn');
+
+    function updateTrimUI(seekVideo = false) {
+        if (!loadedVideo) return;
+        const dur = Math.max(0.1, trimEnd - trimStart);
+        if (trimStartVal) trimStartVal.textContent = formatTime(trimStart);
+        if (trimEndVal) trimEndVal.textContent = formatTime(trimEnd);
+        if (trimTotalVal) trimTotalVal.textContent = `${dur.toFixed(1)}s`;
+        if (trimDurationBadge) trimDurationBadge.textContent = `${dur.toFixed(1)}s`;
+
+        if (trimStartSlider) trimStartSlider.value = trimStart;
+        if (trimEndSlider) trimEndSlider.value = trimEnd;
+
+        trimPresetBtns.forEach(btn => {
+            const pDur = btn.dataset.dur;
+            if (pDur === 'full') {
+                btn.classList.toggle('active', trimStart === 0 && Math.abs(trimEnd - (loadedVideo.duration || 0)) < 0.1);
+            } else {
+                const target = parseFloat(pDur);
+                btn.classList.toggle('active', Math.abs(dur - target) < 0.15);
+            }
+        });
+
+        if (seekVideo && cropSourceVideo) {
+            cropSourceVideo.currentTime = trimStart;
+        }
+    }
+
+    if (trimStartSlider) {
+        trimStartSlider.addEventListener('input', () => {
+            let val = parseFloat(trimStartSlider.value);
+            if (val >= trimEnd - 0.3) {
+                val = Math.max(0, trimEnd - 0.3);
+                trimStartSlider.value = val;
+            }
+            trimStart = val;
+            updateTrimUI(true);
+        });
+    }
+
+    if (trimEndSlider) {
+        trimEndSlider.addEventListener('input', () => {
+            let val = parseFloat(trimEndSlider.value);
+            if (val <= trimStart + 0.3) {
+                const maxD = loadedVideo ? (loadedVideo.duration || 100) : 100;
+                val = Math.min(maxD, trimStart + 0.3);
+                trimEndSlider.value = val;
+            }
+            trimEnd = val;
+            updateTrimUI(false);
+            if (cropSourceVideo) cropSourceVideo.currentTime = trimEnd;
+        });
+    }
+
+    trimPresetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!loadedVideo) return;
+            const pDur = btn.dataset.dur;
+            trimStart = 0;
+            if (pDur === 'full') {
+                trimEnd = loadedVideo.duration || 3.0;
+            } else {
+                const wanted = parseFloat(pDur);
+                trimEnd = Math.min(wanted, loadedVideo.duration || wanted);
+            }
+            updateTrimUI(true);
+        });
+    });
 
     // Helper: format bytes
     function formatBytes(bytes) {
@@ -1315,6 +1416,24 @@ document.addEventListener('keydown', (e) => {
 
         cropBoxNorm = { x: 0, y: 0, w: 1, h: 1 };
         activeCropRatio = 'original';
+
+        // Initialize Trimmer range
+        const totalDur = loadedVideo.duration || 3.0;
+        trimStart = 0;
+        trimEnd = Math.min(2.5, totalDur);
+        if (trimStartSlider) {
+            trimStartSlider.min = 0;
+            trimStartSlider.max = totalDur;
+            trimStartSlider.step = 0.1;
+            trimStartSlider.value = 0;
+        }
+        if (trimEndSlider) {
+            trimEndSlider.min = 0;
+            trimEndSlider.max = totalDur;
+            trimEndSlider.step = 0.1;
+            trimEndSlider.value = trimEnd;
+        }
+        updateTrimUI();
 
         // Update preset pills
         document.querySelectorAll('.preset-ratio-btn').forEach(b => {
@@ -1784,7 +1903,7 @@ document.addEventListener('keydown', (e) => {
         isStagePlaying = true;
         if (creatorStageFrame) creatorStageFrame.classList.add('playing');
         if (creatorLiveVideo) {
-            creatorLiveVideo.currentTime = 0;
+            creatorLiveVideo.currentTime = trimStart;
             creatorLiveVideo.play().catch(() => {});
         }
         if (creatorLiveStatusText) creatorLiveStatusText.textContent = 'Đang phát Live...';
@@ -1798,6 +1917,15 @@ document.addEventListener('keydown', (e) => {
         if (creatorLiveVideo) creatorLiveVideo.pause();
         if (creatorLiveStatusText) creatorLiveStatusText.textContent = 'Nhấn giữ để phát';
         if (testLiveBtnText) testLiveBtnText.textContent = 'Phát thử Live';
+    }
+
+    if (creatorLiveVideo) {
+        creatorLiveVideo.addEventListener('timeupdate', () => {
+            if (isStagePlaying && creatorLiveVideo.currentTime >= trimEnd) {
+                creatorLiveVideo.currentTime = trimStart;
+                creatorLiveVideo.play().catch(() => {});
+            }
+        });
     }
 
     if (creatorStageFrame) {
@@ -1954,18 +2082,23 @@ document.addEventListener('keydown', (e) => {
         // C = 100: 32 kbps (extreme macroblocking / pixelation!)
         const targetBitrate = Math.max(32000, Math.round(6500000 * Math.pow(1 - (compressionPercent / 100) * 0.98, 2)));
 
-        // If no crop, no filters, and 0% compression: return original video bytes directly
+        // Check if trimmed
+        const totalVidDur = loadedVideo.duration || 3.0;
+        const isTrimmed = (trimStart > 0.05) || ((totalVidDur - trimEnd) > 0.1);
+
+        // If no crop, no filters, 0% compression, and no trim: return original video bytes directly
         const isCropped = cropBoxNorm.x > 0.005 || cropBoxNorm.y > 0.005 || cropBoxNorm.w < 0.99 || cropBoxNorm.h < 0.99;
         const hasFilters = videoFilters.brightness !== 100 || videoFilters.contrast !== 100 || videoFilters.saturation !== 100;
         const isCompressed = compressionPercent > 0;
 
-        if (!isCropped && !hasFilters && !isCompressed) {
+        if (!isCropped && !hasFilters && !isCompressed && !isTrimmed) {
             onProgress(70, 'Sử dụng video gốc không nén...');
             const buffer = await loadedVideo.file.arrayBuffer();
             return new Uint8Array(buffer);
         }
 
-        onProgress(35, `Đang xử lý video (${outW}x${outH}, bitrate ${Math.round(targetBitrate / 1000)}k)...`);
+        const trimDuration = Math.max(0.2, trimEnd - trimStart);
+        onProgress(35, `Đang xử lý video (${outW}x${outH}, thời lượng ${trimDuration.toFixed(1)}s)...`);
 
         // Offscreen recording canvas
         const canvas = document.createElement('canvas');
@@ -1992,6 +2125,17 @@ document.addEventListener('keydown', (e) => {
         await new Promise((resolve) => {
             if (offVideo.readyState >= 2) resolve();
             else offVideo.onloadeddata = resolve;
+        });
+
+        // Seek offVideo to trimStart
+        offVideo.currentTime = trimStart;
+        await new Promise((resolve) => {
+            const onSeeked = () => {
+                offVideo.removeEventListener('seeked', onSeeked);
+                resolve();
+            };
+            offVideo.addEventListener('seeked', onSeeked);
+            setTimeout(resolve, 350);
         });
 
         // Determine supported recorder mimeType (prefer MP4)
@@ -2030,9 +2174,20 @@ document.addEventListener('keydown', (e) => {
             if (e.data && e.data.size > 0) chunks.push(e.data);
         };
 
-        const totalDuration = offVideo.duration || 3.0;
-
         return new Promise((resolve, reject) => {
+            let finished = false;
+            let animId = null;
+
+            function finishRecording() {
+                if (finished) return;
+                finished = true;
+                if (animId) cancelAnimationFrame(animId);
+                offVideo.pause();
+                setTimeout(() => {
+                    try { recorder.stop(); } catch (e) {}
+                }, 150);
+            }
+
             recorder.onstop = async () => {
                 const blob = new Blob(chunks, { type: chosenMime });
                 const buf = await blob.arrayBuffer();
@@ -2042,11 +2197,14 @@ document.addEventListener('keydown', (e) => {
             recorder.onerror = (err) => reject(err);
 
             recorder.start(100);
-            offVideo.currentTime = 0;
 
-            let animId = null;
             function drawFrame() {
-                if (offVideo.paused || offVideo.ended) return;
+                if (finished || offVideo.paused || offVideo.ended || offVideo.currentTime >= trimEnd) {
+                    if (!finished && (offVideo.ended || offVideo.currentTime >= trimEnd)) {
+                        finishRecording();
+                    }
+                    return;
+                }
 
                 ctx.filter = filterStr;
                 if (compressionPercent >= 50) {
@@ -2054,17 +2212,21 @@ document.addEventListener('keydown', (e) => {
                 }
                 ctx.drawImage(offVideo, sx, sy, sw, sh, 0, 0, outW, outH);
 
-                const pct = Math.min(75, 35 + (offVideo.currentTime / totalDuration) * 40);
-                onProgress(pct, `Đang mã hóa video (${Math.round((offVideo.currentTime / totalDuration) * 100)}%)...`);
+                const elapsed = Math.max(0, offVideo.currentTime - trimStart);
+                const pct = Math.min(75, 35 + (elapsed / trimDuration) * 40);
+                onProgress(pct, `Đang mã hóa video (${Math.round((elapsed / trimDuration) * 100)}%)...`);
 
                 animId = requestAnimationFrame(drawFrame);
             }
 
+            offVideo.ontimeupdate = () => {
+                if (offVideo.currentTime >= trimEnd) {
+                    finishRecording();
+                }
+            };
+
             offVideo.onended = () => {
-                cancelAnimationFrame(animId);
-                setTimeout(() => {
-                    try { recorder.stop(); } catch (e) {}
-                }, 150);
+                finishRecording();
             };
 
             offVideo.play().then(() => {

@@ -2320,6 +2320,214 @@ body {
     border-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Studio Tool Selector Bar (CapCut / TikTok Studio style) */
+.studio-tools-nav {
+    display: flex;
+    align-items: center;
+    background: #12141a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.studio-tool-tab {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 8px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: clamp(0.72rem, 3.2vw, 0.8rem);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.studio-tool-tab svg {
+    flex-shrink: 0;
+}
+
+.studio-tool-tab:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.studio-tool-tab.active {
+    background: #1d222c;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.studio-tool-tab[data-tool="trim"].active svg { color: #f59e0b; }
+.studio-tool-tab[data-tool="crop"].active svg { color: var(--brand-cyan); }
+.studio-tool-tab[data-tool="color"].active svg { color: var(--brand-tiktok); }
+.studio-tool-tab[data-tool="compress"].active svg { color: var(--android-color); }
+
+/* Tool Panels: only the active one displays! */
+.studio-tool-panel {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 12px;
+    animation: fadeIn 0.2s ease;
+}
+
+.studio-tool-panel.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Video Trimmer Styles */
+.trimmer-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.trim-time-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #14171e;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    gap: 6px;
+}
+
+.trim-time-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.trim-time-block.center {
+    align-items: center;
+    text-align: center;
+}
+
+.trim-time-block.right {
+    align-items: flex-end;
+    text-align: right;
+}
+
+.trim-label {
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+}
+
+.trim-time-block strong {
+    font-size: 0.82rem;
+    color: #fff;
+    font-family: ui-monospace, monospace;
+}
+
+.trim-time-block strong.highlight {
+    color: #f59e0b;
+    font-size: 0.94rem;
+    font-weight: 700;
+}
+
+.trim-slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #111318;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.trim-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.slider-side-label {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    min-width: 65px;
+    flex-shrink: 0;
+}
+
+.trim-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 6px;
+    background: #1e232d;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.trim-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #f59e0b;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    border: 2px solid #fff;
+    transition: transform 0.1s ease;
+}
+
+.trim-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.trim-quick-presets {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.trim-preset-btn.active {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #f59e0b;
+}
+
+.trim-hint-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.74rem;
+    color: #d1d5db;
+    line-height: 1.4;
+}
+
+.trim-hint-box strong {
+    color: #f59e0b;
+}
+
 /* Crop Card */
 .creator-crop-card {
     background: var(--bg-card);
