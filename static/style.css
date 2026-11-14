@@ -1849,20 +1849,21 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     height: 38px;
-    padding: 0 12px;
+    padding: 0 8px;
     border: none;
     border-radius: 8px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.82rem;
+    font-size: clamp(0.72rem, 3.4vw, 0.82rem);
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.2s var(--ease-out);
     user-select: none;
     line-height: 1;
+    white-space: nowrap;
 }
 
 .app-tab-btn svg {
@@ -2478,24 +2479,34 @@ body {
 
 .crop-handle {
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     background: #fff;
     border: 1.5px solid #000;
-    border-radius: 2px;
-    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    border-radius: 3px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     z-index: 10;
     touch-action: none;
 }
 
-.crop-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
-.crop-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
-.crop-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
-.crop-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
-.crop-handle.n  { top: -6px; left: calc(50% - 6px); cursor: ns-resize; }
-.crop-handle.s  { bottom: -6px; left: calc(50% - 6px); cursor: ns-resize; }
-.crop-handle.w  { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
-.crop-handle.e  { top: calc(50% - 6px); right: -6px; cursor: ew-resize; }
+/* Touch hit target optimization for mobile fingers */
+.crop-handle::after {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: -12px;
+    right: -12px;
+    bottom: -12px;
+}
+
+.crop-handle.nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.crop-handle.ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.crop-handle.sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.crop-handle.se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+.crop-handle.n  { top: -7px; left: calc(50% - 7px); cursor: ns-resize; }
+.crop-handle.s  { bottom: -7px; left: calc(50% - 7px); cursor: ns-resize; }
+.crop-handle.w  { top: calc(50% - 7px); left: -7px; cursor: ew-resize; }
+.crop-handle.e  { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
 
 .crop-timeline-bar {
     display: flex;
