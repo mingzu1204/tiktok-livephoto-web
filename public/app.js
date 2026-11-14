@@ -1011,3 +1011,1150 @@ document.addEventListener('keydown', (e) => {
         triggerSecretAccess();
     }
 });
+
+/* ==========================================================================
+   LIVE PHOTO CREATOR STUDIO (ANDROID MOTION PHOTO)
+   ========================================================================== */
+(function initLivePhotoCreator() {
+    // 1. Navigation Tab Switching
+    const tabBtnDownloader = document.getElementById('tabBtnDownloader');
+    const tabBtnCreator = document.getElementById('tabBtnCreator');
+    const downloaderSearchShell = document.getElementById('downloaderSearchShell');
+    const resultsSection = document.getElementById('resultsSection');
+    const emptyState = document.getElementById('emptyState');
+    const stickyActionDock = document.getElementById('stickyActionDock');
+    const creatorSection = document.getElementById('creatorSection');
+    const platformSegment = document.querySelector('.platform-segment');
+
+    let currentMainTab = 'downloader';
+
+    function switchMainTab(tab) {
+        currentMainTab = tab;
+        if (tab === 'downloader') {
+            if (tabBtnDownloader) tabBtnDownloader.classList.add('active');
+            if (tabBtnCreator) tabBtnCreator.classList.remove('active');
+            if (downloaderSearchShell) downloaderSearchShell.style.display = 'block';
+            if (currentData && currentData.items && currentData.items.length) {
+                if (resultsSection) resultsSection.style.display = 'flex';
+                if (stickyActionDock) stickyActionDock.style.display = 'flex';
+            }
+            if (creatorSection) creatorSection.style.display = 'none';
+            if (platformSegment) platformSegment.style.display = 'inline-flex';
+        } else {
+            if (tabBtnDownloader) tabBtnDownloader.classList.remove('active');
+            if (tabBtnCreator) tabBtnCreator.classList.add('active');
+            if (downloaderSearchShell) downloaderSearchShell.style.display = 'none';
+            if (resultsSection) resultsSection.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'none';
+            if (stickyActionDock) stickyActionDock.style.display = 'none';
+            if (creatorSection) creatorSection.style.display = 'flex';
+            if (platformSegment) platformSegment.style.display = 'none';
+        }
+    }
+
+    if (tabBtnDownloader) tabBtnDownloader.addEventListener('click', () => switchMainTab('downloader'));
+    if (tabBtnCreator) tabBtnCreator.addEventListener('click', () => switchMainTab('creator'));
+
+    // State Variables
+    let loadedImage = null; // { file, imgElement, width, height, dataUrl, name, size }
+    let loadedVideo = null; // { file, videoElement, width, height, duration, blobUrl, name, size }
+    
+    // Filters (Separate for image and video!)
+    const imageFilters = { brightness: 100, contrast: 100, saturation: 100 };
+    const videoFilters = { brightness: 100, contrast: 100, saturation: 100 };
+    let compressionPercent = 0; // 0 to 100
+
+    // Crop State: normalized coordinates 0..1
+    let activeCropRatio = 'original'; // 'original', '9:16', '16:9', '1:1', '4:3', '3:4', 'free'
+    let cropBoxNorm = { x: 0, y: 0, w: 1, h: 1 };
+
+    // Elements
+    const creatorImageFile = document.getElementById('creatorImageFile');
+    const creatorVideoFile = document.getElementById('creatorVideoFile');
+    const browseImageBtn = document.getElementById('browseImageBtn');
+    const browseVideoBtn = document.getElementById('browseVideoBtn');
+    const changeImageBtn = document.getElementById('changeImageBtn');
+    const changeVideoBtn = document.getElementById('changeVideoBtn');
+    const imageUploadCard = document.getElementById('imageUploadCard');
+    const videoUploadCard = document.getElementById('videoUploadCard');
+    const imageDropContent = document.getElementById('imageDropContent');
+    const imagePreviewContent = document.getElementById('imagePreviewContent');
+    const videoDropContent = document.getElementById('videoDropContent');
+    const videoPreviewContent = document.getElementById('videoPreviewContent');
+    const imageThumbImg = document.getElementById('imageThumbImg');
+    const videoThumbEl = document.getElementById('videoThumbEl');
+    const imageFileName = document.getElementById('imageFileName');
+    const imageFileMeta = document.getElementById('imageFileMeta');
+    const videoFileName = document.getElementById('videoFileName');
+    const videoFileMeta = document.getElementById('videoFileMeta');
+
+    const ratioNoticeBanner = document.getElementById('ratioNoticeBanner');
+    const ratioNoticeDesc = document.getElementById('ratioNoticeDesc');
+    const currentRatioBadge = document.getElementById('currentRatioBadge');
+    const creatorStudioWorkspace = document.getElementById('creatorStudioWorkspace');
+
+    const creatorStageFrame = document.getElementById('creatorStageFrame');
+    const creatorLiveImage = document.getElementById('creatorLiveImage');
+    const creatorLiveVideo = document.getElementById('creatorLiveVideo');
+    const stageRatioTag = document.getElementById('stageRatioTag');
+    const creatorLiveStatusText = document.getElementById('creatorLiveStatusText');
+    const testLiveBtn = document.getElementById('testLiveBtn');
+    const testLiveBtnText = document.getElementById('testLiveBtnText');
+
+    // Crop elements
+    const cropViewport = document.getElementById('cropViewport');
+    const cropSourceVideo = document.getElementById('cropSourceVideo');
+    const cropBox = document.getElementById('cropBox');
+    const cropResolutionBadge = document.getElementById('cropResolutionBadge');
+    const cropPlayPauseBtn = document.getElementById('cropPlayPauseBtn');
+    const cropPlayIcon = document.getElementById('cropPlayIcon');
+    const cropTimeSlider = document.getElementById('cropTimeSlider');
+    const cropTimeDisplay = document.getElementById('cropTimeDisplay');
+
+    // Filters elements
+    const filterTabImage = document.getElementById('filterTabImage');
+    const filterTabVideo = document.getElementById('filterTabVideo');
+    const imageFilterPanel = document.getElementById('imageFilterPanel');
+    const videoFilterPanel = document.getElementById('videoFilterPanel');
+    const imgBrightnessSlider = document.getElementById('imgBrightnessSlider');
+    const imgContrastSlider = document.getElementById('imgContrastSlider');
+    const imgSaturationSlider = document.getElementById('imgSaturationSlider');
+    const imgBrightnessVal = document.getElementById('imgBrightnessVal');
+    const imgContrastVal = document.getElementById('imgContrastVal');
+    const imgSaturationVal = document.getElementById('imgSaturationVal');
+    const resetImgFilterBtn = document.getElementById('resetImgFilterBtn');
+
+    const vidBrightnessSlider = document.getElementById('vidBrightnessSlider');
+    const vidContrastSlider = document.getElementById('vidContrastSlider');
+    const vidSaturationSlider = document.getElementById('vidSaturationSlider');
+    const vidBrightnessVal = document.getElementById('vidBrightnessVal');
+    const vidContrastVal = document.getElementById('vidContrastVal');
+    const vidSaturationVal = document.getElementById('vidSaturationVal');
+    const resetVidFilterBtn = document.getElementById('resetVidFilterBtn');
+
+    // Compression elements
+    const compressionSlider = document.getElementById('compressionSlider');
+    const compressionPercentText = document.getElementById('compressionPercentText');
+    const compressionStatusBadge = document.getElementById('compressionStatusBadge');
+
+    // Export elements
+    const exportAndroidBtn = document.getElementById('exportAndroidBtn');
+    const exportLoader = document.getElementById('exportLoader');
+    const exportProgressBox = document.getElementById('exportProgressBox');
+    const exportProgressFill = document.getElementById('exportProgressFill');
+    const exportProgressMsg = document.getElementById('exportProgressMsg');
+
+    // Helper: format bytes
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Helper: format ratio string
+    function getRatioString(w, h) {
+        if (!w || !h) return '9:16';
+        const r = w / h;
+        if (Math.abs(r - 9/16) < 0.04) return '9:16';
+        if (Math.abs(r - 16/9) < 0.04) return '16:9';
+        if (Math.abs(r - 1) < 0.04) return '1:1';
+        if (Math.abs(r - 4/3) < 0.04) return '4:3';
+        if (Math.abs(r - 3/4) < 0.04) return '3:4';
+        return `${w}:${h}`;
+    }
+
+    // Helper: format time mm:ss.s
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        const ms = Math.floor((seconds % 1) * 10);
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${ms}`;
+    }
+
+    // File Selection Handlers
+    if (browseImageBtn) browseImageBtn.addEventListener('click', () => creatorImageFile.click());
+    if (changeImageBtn) changeImageBtn.addEventListener('click', () => creatorImageFile.click());
+    if (browseVideoBtn) browseVideoBtn.addEventListener('click', () => creatorVideoFile.click());
+    if (changeVideoBtn) changeVideoBtn.addEventListener('click', () => creatorVideoFile.click());
+
+    if (imageUploadCard) {
+        ['dragenter', 'dragover'].forEach(name => {
+            imageUploadCard.addEventListener(name, (e) => {
+                e.preventDefault();
+                imageUploadCard.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+            imageUploadCard.addEventListener(name, (e) => {
+                e.preventDefault();
+                imageUploadCard.classList.remove('drag-over');
+            });
+        });
+        imageUploadCard.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files && files.length && files[0].type.startsWith('image/')) {
+                handleImageFile(files[0]);
+            } else {
+                showToast('Vui lòng thả đúng tệp hình ảnh!');
+            }
+        });
+    }
+
+    if (videoUploadCard) {
+        ['dragenter', 'dragover'].forEach(name => {
+            videoUploadCard.addEventListener(name, (e) => {
+                e.preventDefault();
+                videoUploadCard.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+            videoUploadCard.addEventListener(name, (e) => {
+                e.preventDefault();
+                videoUploadCard.classList.remove('drag-over');
+            });
+        });
+        videoUploadCard.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files && files.length && files[0].type.startsWith('video/')) {
+                handleVideoFile(files[0]);
+            } else {
+                showToast('Vui lòng thả đúng tệp video!');
+            }
+        });
+    }
+
+    if (creatorImageFile) {
+        creatorImageFile.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length) {
+                handleImageFile(e.target.files[0]);
+            }
+        });
+    }
+
+    if (creatorVideoFile) {
+        creatorVideoFile.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length) {
+                handleVideoFile(e.target.files[0]);
+            }
+        });
+    }
+
+    function handleImageFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            const img = new Image();
+            img.onload = () => {
+                loadedImage = {
+                    file: file,
+                    name: file.name,
+                    size: file.size,
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    dataUrl: dataUrl,
+                    element: img
+                };
+
+                if (imageDropContent) imageDropContent.style.display = 'none';
+                if (imagePreviewContent) imagePreviewContent.style.display = 'flex';
+                if (imageUploadCard) imageUploadCard.classList.add('has-file');
+                if (imageThumbImg) imageThumbImg.src = dataUrl;
+                if (imageFileName) imageFileName.textContent = file.name;
+                if (imageFileMeta) imageFileMeta.textContent = `${img.naturalWidth} x ${img.naturalHeight} • ${formatBytes(file.size)}`;
+
+                showToast('Đã tải ảnh tĩnh!');
+                checkReadyForWorkspace();
+            };
+            img.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function handleVideoFile(file) {
+        const blobUrl = URL.createObjectURL(file);
+        const tempVid = document.createElement('video');
+        tempVid.preload = 'metadata';
+        tempVid.src = blobUrl;
+        tempVid.onloadedmetadata = () => {
+            loadedVideo = {
+                file: file,
+                name: file.name,
+                size: file.size,
+                width: tempVid.videoWidth,
+                height: tempVid.videoHeight,
+                duration: tempVid.duration,
+                blobUrl: blobUrl,
+                element: tempVid
+            };
+
+            if (videoDropContent) videoDropContent.style.display = 'none';
+            if (videoPreviewContent) videoPreviewContent.style.display = 'flex';
+            if (videoUploadCard) videoUploadCard.classList.add('has-file');
+            if (videoThumbEl) videoThumbEl.src = blobUrl;
+            if (videoFileName) videoFileName.textContent = file.name;
+            const dur = tempVid.duration ? `${tempVid.duration.toFixed(1)}s` : '';
+            if (videoFileMeta) videoFileMeta.textContent = `${tempVid.videoWidth} x ${tempVid.videoHeight} • ${dur} • ${formatBytes(file.size)}`;
+
+            showToast('Đã tải video chuyển động!');
+            checkReadyForWorkspace();
+        };
+    }
+
+    function checkReadyForWorkspace() {
+        if (loadedImage && loadedVideo) {
+            initCreatorWorkspace();
+        }
+    }
+
+    // 3. Initialize Workspace
+    function initCreatorWorkspace() {
+        if (!loadedImage || !loadedVideo) return;
+        if (creatorStudioWorkspace) creatorStudioWorkspace.style.display = 'flex';
+
+        cropBoxNorm = { x: 0, y: 0, w: 1, h: 1 };
+        activeCropRatio = 'original';
+
+        // Update preset pills
+        document.querySelectorAll('.preset-ratio-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.ratio === 'original');
+        });
+
+        // Set up video sources
+        if (cropSourceVideo) {
+            cropSourceVideo.src = loadedVideo.blobUrl;
+            cropSourceVideo.currentTime = 0;
+        }
+        if (creatorLiveVideo) {
+            creatorLiveVideo.src = loadedVideo.blobUrl;
+            creatorLiveVideo.currentTime = 0;
+            creatorLiveVideo.muted = false; // with audio on play
+        }
+
+        // Wait for video metadata to position crop box
+        if (cropSourceVideo.readyState >= 1) {
+            updateCropBoxDOM();
+            updateLivePreview();
+        } else {
+            cropSourceVideo.onloadedmetadata = () => {
+                updateCropBoxDOM();
+                updateLivePreview();
+            };
+        }
+
+        creatorStudioWorkspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // 4. Update Crop Box & Aspect Ratio Matching
+    function getCroppedVideoDimensions() {
+        if (!loadedVideo) return { w: 1080, h: 1920, ratio: 9/16 };
+        const w = Math.max(16, Math.round(loadedVideo.width * cropBoxNorm.w));
+        const h = Math.max(16, Math.round(loadedVideo.height * cropBoxNorm.h));
+        return { w, h, ratio: w / h };
+    }
+
+    function updateCropBoxDOM() {
+        if (!cropBox) return;
+        cropBox.style.left = `${cropBoxNorm.x * 100}%`;
+        cropBox.style.top = `${cropBoxNorm.y * 100}%`;
+        cropBox.style.width = `${cropBoxNorm.w * 100}%`;
+        cropBox.style.height = `${cropBoxNorm.h * 100}%`;
+
+        const dims = getCroppedVideoDimensions();
+        const ratioStr = getRatioString(dims.w, dims.h);
+        if (cropResolutionBadge) {
+            cropResolutionBadge.textContent = `${dims.w} x ${dims.h} (${ratioStr})`;
+        }
+    }
+
+    // "get video ratio if image ratio different from the video"
+    function updateLivePreview() {
+        if (!loadedImage || !loadedVideo) return;
+
+        const dims = getCroppedVideoDimensions();
+        const targetRatio = dims.ratio;
+        const ratioStr = getRatioString(dims.w, dims.h);
+
+        // Check if image ratio differs from video ratio
+        const imgRatio = loadedImage.width / loadedImage.height;
+        const isRatioDifferent = Math.abs(imgRatio - targetRatio) > 0.01;
+
+        if (ratioNoticeBanner) {
+            if (isRatioDifferent) {
+                ratioNoticeBanner.style.display = 'flex';
+                if (ratioNoticeDesc) {
+                    ratioNoticeDesc.textContent = `Ảnh gốc (${loadedImage.width}x${loadedImage.height}) đã được tự động căn cắt theo tỷ lệ video (${ratioStr}) để hiển thị khớp 100% khi phát Live.`;
+                }
+                if (currentRatioBadge) {
+                    currentRatioBadge.textContent = `Tỷ lệ video: ${ratioStr}`;
+                }
+            } else {
+                ratioNoticeBanner.style.display = 'none';
+            }
+        }
+
+        if (stageRatioTag) stageRatioTag.textContent = ratioStr;
+        if (creatorStageFrame) {
+            creatorStageFrame.style.aspectRatio = `${dims.w} / ${dims.h}`;
+        }
+
+        // Render cropped & filtered still image onto creatorLiveImage
+        renderLiveImage(targetRatio);
+
+        // Apply video filters to video elements
+        applyVideoFilters();
+    }
+
+    function renderLiveImage(targetRatio) {
+        if (!loadedImage) return;
+
+        const imgW = loadedImage.width;
+        const imgH = loadedImage.height;
+        const imgRatio = imgW / imgH;
+
+        // Center-crop source image to match targetRatio
+        let srcX = 0, srcY = 0, srcW = imgW, srcH = imgH;
+        if (imgRatio > targetRatio) {
+            srcW = Math.round(imgH * targetRatio);
+            srcX = Math.round((imgW - srcW) / 2);
+        } else {
+            srcH = Math.round(imgW / targetRatio);
+            srcY = Math.round((imgH - srcH) / 2);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = srcW;
+        canvas.height = srcH;
+        const ctx = canvas.getContext('2d');
+
+        // Apply Image Filters ONLY
+        ctx.filter = `brightness(${imageFilters.brightness}%) contrast(${imageFilters.contrast}%) saturate(${imageFilters.saturation}%)`;
+        ctx.drawImage(loadedImage.element, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+        creatorLiveImage.src = canvas.toDataURL('image/jpeg', 0.95);
+    }
+
+    function applyVideoFilters() {
+        const filterStr = `brightness(${videoFilters.brightness}%) contrast(${videoFilters.contrast}%) saturate(${videoFilters.saturation}%)`;
+        if (creatorLiveVideo) creatorLiveVideo.style.filter = filterStr;
+        if (cropSourceVideo) cropSourceVideo.style.filter = filterStr;
+    }
+
+    // 5. Preset Ratio Buttons
+    document.querySelectorAll('.preset-ratio-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.preset-ratio-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const ratioType = btn.dataset.ratio;
+            activeCropRatio = ratioType;
+            applyPresetRatio(ratioType);
+        });
+    });
+
+    function applyPresetRatio(ratioType) {
+        if (!loadedVideo) return;
+        const vw = loadedVideo.width;
+        const vh = loadedVideo.height;
+
+        let targetR = null;
+        if (ratioType === 'original') targetR = vw / vh;
+        else if (ratioType === '9:16') targetR = 9 / 16;
+        else if (ratioType === '16:9') targetR = 16 / 9;
+        else if (ratioType === '1:1') targetR = 1.0;
+        else if (ratioType === '4:3') targetR = 4 / 3;
+        else if (ratioType === '3:4') targetR = 3 / 4;
+        else if (ratioType === 'free') targetR = null;
+
+        if (targetR !== null) {
+            const currentVideoRatio = vw / vh;
+            let newW, newH, newX, newY;
+            if (targetR > currentVideoRatio) {
+                newW = 1.0;
+                newH = (vw / targetR) / vh;
+                newX = 0;
+                newY = (1.0 - newH) / 2;
+            } else {
+                newH = 1.0;
+                newW = (vh * targetR) / vw;
+                newY = 0;
+                newX = (1.0 - newW) / 2;
+            }
+            cropBoxNorm = {
+                x: Math.max(0, Math.min(1, newX)),
+                y: Math.max(0, Math.min(1, newY)),
+                w: Math.max(0.1, Math.min(1, newW)),
+                h: Math.max(0.1, Math.min(1, newH))
+            };
+        }
+
+        updateCropBoxDOM();
+        updateLivePreview();
+    }
+
+    // 6. Interactive Drag & Resize of Crop Box
+    let isInteracting = false;
+    let interactionMode = null; // 'move' or 'resize'
+    let activeHandle = null;
+    let startPointer = { x: 0, y: 0 };
+    let initialCropNorm = { x: 0, y: 0, w: 1, h: 1 };
+
+    if (cropViewport) {
+        cropViewport.addEventListener('pointerdown', (e) => {
+            const handle = e.target.closest('.crop-handle');
+            const box = e.target.closest('.crop-box');
+
+            if (handle) {
+                isInteracting = true;
+                interactionMode = 'resize';
+                activeHandle = handle.dataset.handle;
+            } else if (box) {
+                isInteracting = true;
+                interactionMode = 'move';
+                activeHandle = null;
+            } else {
+                return;
+            }
+
+            e.preventDefault();
+            startPointer = { x: e.clientX, y: e.clientY };
+            initialCropNorm = { ...cropBoxNorm };
+            cropViewport.setPointerCapture(e.pointerId);
+        });
+
+        cropViewport.addEventListener('pointermove', (e) => {
+            if (!isInteracting) return;
+            const rect = cropViewport.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+
+            const dx = (e.clientX - startPointer.x) / rect.width;
+            const dy = (e.clientY - startPointer.y) / rect.height;
+
+            if (interactionMode === 'move') {
+                let newX = initialCropNorm.x + dx;
+                let newY = initialCropNorm.y + dy;
+
+                newX = Math.max(0, Math.min(1 - initialCropNorm.w, newX));
+                newY = Math.max(0, Math.min(1 - initialCropNorm.h, newY));
+
+                cropBoxNorm.x = newX;
+                cropBoxNorm.y = newY;
+            } else if (interactionMode === 'resize') {
+                let x = initialCropNorm.x;
+                let y = initialCropNorm.y;
+                let w = initialCropNorm.w;
+                let h = initialCropNorm.h;
+
+                const minSizeNorm = 0.08;
+
+                if (activeHandle.includes('e')) w = Math.max(minSizeNorm, initialCropNorm.w + dx);
+                if (activeHandle.includes('s')) h = Math.max(minSizeNorm, initialCropNorm.h + dy);
+                if (activeHandle.includes('w')) {
+                    const maxW = initialCropNorm.x + initialCropNorm.w;
+                    w = Math.max(minSizeNorm, Math.min(maxW, initialCropNorm.w - dx));
+                    x = maxW - w;
+                }
+                if (activeHandle.includes('n')) {
+                    const maxH = initialCropNorm.y + initialCropNorm.h;
+                    h = Math.max(minSizeNorm, Math.min(maxH, initialCropNorm.h - dy));
+                    y = maxH - h;
+                }
+
+                // If ratio preset is locked (not free)
+                if (activeCropRatio !== 'free' && loadedVideo) {
+                    let targetR = null;
+                    if (activeCropRatio === 'original') targetR = loadedVideo.width / loadedVideo.height;
+                    else if (activeCropRatio === '9:16') targetR = 9 / 16;
+                    else if (activeCropRatio === '16:9') targetR = 16 / 9;
+                    else if (activeCropRatio === '1:1') targetR = 1.0;
+                    else if (activeCropRatio === '4:3') targetR = 4 / 3;
+                    else if (activeCropRatio === '3:4') targetR = 3 / 4;
+
+                    if (targetR !== null) {
+                        const videoRatio = loadedVideo.width / loadedVideo.height;
+                        // w in norm -> pixels = w * loadedVideo.width
+                        // h in norm -> pixels = h * loadedVideo.height
+                        // ratio = (w * loadedVideo.width) / (h * loadedVideo.height) = targetR
+                        // -> h = (w * loadedVideo.width) / (loadedVideo.height * targetR)
+                        h = (w * videoRatio) / targetR;
+                    }
+                }
+
+                // Bounds clamping
+                if (x + w > 1) {
+                    w = 1 - x;
+                }
+                if (y + h > 1) {
+                    h = 1 - y;
+                }
+                x = Math.max(0, x);
+                y = Math.max(0, y);
+
+                cropBoxNorm = { x, y, w, h };
+            }
+
+            updateCropBoxDOM();
+            updateLivePreview();
+        });
+
+        const stopInteraction = (e) => {
+            if (isInteracting) {
+                isInteracting = false;
+                interactionMode = null;
+                activeHandle = null;
+                try { cropViewport.releasePointerCapture(e.pointerId); } catch (err) {}
+                updateCropBoxDOM();
+                updateLivePreview();
+            }
+        };
+
+        cropViewport.addEventListener('pointerup', stopInteraction);
+        cropViewport.addEventListener('pointercancel', stopInteraction);
+    }
+
+    // Timeline Scrubber
+    if (cropPlayPauseBtn && cropSourceVideo) {
+        cropPlayPauseBtn.addEventListener('click', () => {
+            if (cropSourceVideo.paused) {
+                cropSourceVideo.play().catch(() => {});
+                if (cropPlayIcon) cropPlayIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+            } else {
+                cropSourceVideo.pause();
+                if (cropPlayIcon) cropPlayIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+            }
+        });
+
+        cropSourceVideo.addEventListener('timeupdate', () => {
+            if (cropSourceVideo.duration) {
+                const pct = (cropSourceVideo.currentTime / cropSourceVideo.duration) * 100;
+                if (cropTimeSlider) cropTimeSlider.value = pct;
+                if (cropTimeDisplay) cropTimeDisplay.textContent = formatTime(cropSourceVideo.currentTime);
+            }
+        });
+
+        cropSourceVideo.addEventListener('ended', () => {
+            if (cropPlayIcon) cropPlayIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+        });
+    }
+
+    if (cropTimeSlider && cropSourceVideo) {
+        cropTimeSlider.addEventListener('input', () => {
+            if (cropSourceVideo.duration) {
+                cropSourceVideo.currentTime = (cropTimeSlider.value / 100) * cropSourceVideo.duration;
+            }
+        });
+    }
+
+    // 7. Separate Color / Brightness Adjustments
+    if (filterTabImage) {
+        filterTabImage.addEventListener('click', () => {
+            filterTabImage.classList.add('active');
+            if (filterTabVideo) filterTabVideo.classList.remove('active');
+            if (imageFilterPanel) imageFilterPanel.style.display = 'flex';
+            if (videoFilterPanel) videoFilterPanel.style.display = 'none';
+        });
+    }
+
+    if (filterTabVideo) {
+        filterTabVideo.addEventListener('click', () => {
+            filterTabVideo.classList.add('active');
+            if (filterTabImage) filterTabImage.classList.remove('active');
+            if (imageFilterPanel) imageFilterPanel.style.display = 'none';
+            if (videoFilterPanel) videoFilterPanel.style.display = 'flex';
+        });
+    }
+
+    // Image Sliders (Separate!)
+    if (imgBrightnessSlider) {
+        imgBrightnessSlider.addEventListener('input', () => {
+            imageFilters.brightness = parseInt(imgBrightnessSlider.value, 10);
+            if (imgBrightnessVal) imgBrightnessVal.textContent = `${imageFilters.brightness}%`;
+            updateLivePreview();
+        });
+    }
+    if (imgContrastSlider) {
+        imgContrastSlider.addEventListener('input', () => {
+            imageFilters.contrast = parseInt(imgContrastSlider.value, 10);
+            if (imgContrastVal) imgContrastVal.textContent = `${imageFilters.contrast}%`;
+            updateLivePreview();
+        });
+    }
+    if (imgSaturationSlider) {
+        imgSaturationSlider.addEventListener('input', () => {
+            imageFilters.saturation = parseInt(imgSaturationSlider.value, 10);
+            if (imgSaturationVal) imgSaturationVal.textContent = `${imageFilters.saturation}%`;
+            updateLivePreview();
+        });
+    }
+    if (resetImgFilterBtn) {
+        resetImgFilterBtn.addEventListener('click', () => {
+            imageFilters.brightness = 100;
+            imageFilters.contrast = 100;
+            imageFilters.saturation = 100;
+            if (imgBrightnessSlider) imgBrightnessSlider.value = 100;
+            if (imgContrastSlider) imgContrastSlider.value = 100;
+            if (imgSaturationSlider) imgSaturationSlider.value = 100;
+            if (imgBrightnessVal) imgBrightnessVal.textContent = '100%';
+            if (imgContrastVal) imgContrastVal.textContent = '100%';
+            if (imgSaturationVal) imgSaturationVal.textContent = '100%';
+            updateLivePreview();
+            showToast('Đã đặt lại màu ảnh!');
+        });
+    }
+
+    // Video Sliders (Separate!)
+    if (vidBrightnessSlider) {
+        vidBrightnessSlider.addEventListener('input', () => {
+            videoFilters.brightness = parseInt(vidBrightnessSlider.value, 10);
+            if (vidBrightnessVal) vidBrightnessVal.textContent = `${videoFilters.brightness}%`;
+            applyVideoFilters();
+        });
+    }
+    if (vidContrastSlider) {
+        vidContrastSlider.addEventListener('input', () => {
+            videoFilters.contrast = parseInt(vidContrastSlider.value, 10);
+            if (vidContrastVal) vidContrastVal.textContent = `${videoFilters.contrast}%`;
+            applyVideoFilters();
+        });
+    }
+    if (vidSaturationSlider) {
+        vidSaturationSlider.addEventListener('input', () => {
+            videoFilters.saturation = parseInt(vidSaturationSlider.value, 10);
+            if (vidSaturationVal) vidSaturationVal.textContent = `${videoFilters.saturation}%`;
+            applyVideoFilters();
+        });
+    }
+    if (resetVidFilterBtn) {
+        resetVidFilterBtn.addEventListener('click', () => {
+            videoFilters.brightness = 100;
+            videoFilters.contrast = 100;
+            videoFilters.saturation = 100;
+            if (vidBrightnessSlider) vidBrightnessSlider.value = 100;
+            if (vidContrastSlider) vidContrastSlider.value = 100;
+            if (vidSaturationSlider) vidSaturationSlider.value = 100;
+            if (vidBrightnessVal) vidBrightnessVal.textContent = '100%';
+            if (vidContrastVal) vidContrastVal.textContent = '100%';
+            if (vidSaturationVal) vidSaturationVal.textContent = '100%';
+            applyVideoFilters();
+            showToast('Đã đặt lại màu video!');
+        });
+    }
+
+    // 8. Compression Slider (0% to 100%, video only, higher = more pixelated)
+    if (compressionSlider) {
+        compressionSlider.addEventListener('input', () => {
+            compressionPercent = parseInt(compressionSlider.value, 10);
+            updateCompressionUI();
+        });
+    }
+
+    function updateCompressionUI() {
+        if (!compressionPercentText || !compressionStatusBadge) return;
+        const val = compressionPercent;
+
+        if (val === 0) {
+            compressionPercentText.textContent = '0% (Không nén - Siêu nét)';
+            compressionStatusBadge.textContent = '0% - Chất lượng gốc';
+            compressionStatusBadge.className = 'compression-badge';
+        } else if (val <= 30) {
+            compressionPercentText.textContent = `${val}% (Nén nhẹ - Chất lượng cao)`;
+            compressionStatusBadge.textContent = `${val}% - Nén nhẹ`;
+            compressionStatusBadge.className = 'compression-badge';
+        } else if (val <= 60) {
+            compressionPercentText.textContent = `${val}% (Nén vừa - Giảm dung lượng)`;
+            compressionStatusBadge.textContent = `${val}% - Nén vừa`;
+            compressionStatusBadge.className = 'compression-badge';
+        } else if (val <= 85) {
+            compressionPercentText.textContent = `${val}% (Nén cao - Bắt đầu vỡ nét)`;
+            compressionStatusBadge.textContent = `${val}% - Bắt đầu vỡ nét`;
+            compressionStatusBadge.className = 'compression-badge warning';
+        } else {
+            compressionPercentText.textContent = `${val}% (Nén tối đa - Vỡ nét cực mạnh)`;
+            compressionStatusBadge.textContent = `${val}% - Vỡ nét tối đa`;
+            compressionStatusBadge.className = 'compression-badge danger';
+        }
+    }
+
+    // 9. Interactive Live Photo Preview (Touch / Mouse down to play video)
+    let isStagePlaying = false;
+
+    function playStageLive() {
+        if (!loadedVideo || isStagePlaying) return;
+        isStagePlaying = true;
+        if (creatorStageFrame) creatorStageFrame.classList.add('playing');
+        if (creatorLiveVideo) {
+            creatorLiveVideo.currentTime = 0;
+            creatorLiveVideo.play().catch(() => {});
+        }
+        if (creatorLiveStatusText) creatorLiveStatusText.textContent = 'Đang phát Live...';
+        if (testLiveBtnText) testLiveBtnText.textContent = 'Dừng phát';
+    }
+
+    function stopStageLive() {
+        if (!isStagePlaying) return;
+        isStagePlaying = false;
+        if (creatorStageFrame) creatorStageFrame.classList.remove('playing');
+        if (creatorLiveVideo) creatorLiveVideo.pause();
+        if (creatorLiveStatusText) creatorLiveStatusText.textContent = 'Nhấn giữ để phát';
+        if (testLiveBtnText) testLiveBtnText.textContent = 'Phát thử Live';
+    }
+
+    if (creatorStageFrame) {
+        creatorStageFrame.addEventListener('mousedown', playStageLive);
+        window.addEventListener('mouseup', stopStageLive);
+
+        creatorStageFrame.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            playStageLive();
+        }, { passive: false });
+        creatorStageFrame.addEventListener('touchend', stopStageLive);
+        creatorStageFrame.addEventListener('touchcancel', stopStageLive);
+    }
+
+    if (testLiveBtn) {
+        testLiveBtn.addEventListener('click', () => {
+            if (isStagePlaying) stopStageLive();
+            else playStageLive();
+        });
+    }
+
+    // 10. Android Motion Photo Packager (Pure Client-side JavaScript)
+    function buildAndroidMotionPhotoBytes(jpegUint8Array, videoUint8Array) {
+        if (jpegUint8Array[0] !== 0xFF || jpegUint8Array[1] !== 0xD8) {
+            throw new Error('Ảnh nguồn không đúng định dạng JPEG!');
+        }
+
+        const videoBytes = videoUint8Array;
+        const vLen = videoBytes.length;
+
+        // Samsung SEF trailer header before video (24 bytes):
+        // marker (0x00, 0x00, 0x30, 0x0A) + length 16 (uint32 LE) + "MotionPhoto_Data" (16 bytes ASCII)
+        const headerBefore = new Uint8Array(24);
+        headerBefore[0] = 0x00; headerBefore[1] = 0x00; headerBefore[2] = 0x30; headerBefore[3] = 0x0A;
+        new DataView(headerBefore.buffer).setUint32(4, 16, true);
+        const mpDataStr = "MotionPhoto_Data";
+        for (let i = 0; i < 16; i++) {
+            headerBefore[8 + i] = mpDataStr.charCodeAt(i);
+        }
+        const videoOffsetPositive = 24;
+
+        // Trailer after video (32 bytes):
+        // "SEFH" (4) + 106 (4) + 1 (4) + marker (4) + negative_offset_from_sef (4) + data_length (4) + sef_data_size 24 (4) + "SEFT" (4)
+        const trailerAfter = new Uint8Array(32);
+        const sefhStr = "SEFH";
+        for (let i = 0; i < 4; i++) trailerAfter[i] = sefhStr.charCodeAt(i);
+        const viewAfter = new DataView(trailerAfter.buffer);
+        viewAfter.setUint32(4, 106, true);
+        viewAfter.setUint32(8, 1, true);
+        trailerAfter[12] = 0x00; trailerAfter[13] = 0x00; trailerAfter[14] = 0x30; trailerAfter[15] = 0x0A;
+        const negativeOffsetFromSef = 24 + vLen;
+        const dataLength = vLen + 24;
+        viewAfter.setUint32(16, negativeOffsetFromSef, true);
+        viewAfter.setUint32(20, dataLength, true);
+        const sefDataSize = 24;
+        viewAfter.setUint32(24, sefDataSize, true);
+        const seftStr = "SEFT";
+        for (let i = 0; i < 4; i++) trailerAfter[28 + i] = seftStr.charCodeAt(i);
+
+        // Combined trailer
+        const trailerBytes = new Uint8Array(24 + vLen + 32);
+        trailerBytes.set(headerBefore, 0);
+        trailerBytes.set(videoBytes, 24);
+        trailerBytes.set(trailerAfter, 24 + vLen);
+
+        const videoOffsetNegative = trailerBytes.length - videoOffsetPositive; // vLen + 32
+
+        // Google Camera XMP Metadata
+        const xmpXml = `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:GCamera="http://ns.google.com/photos/1.0/camera/"
+    xmlns:Container="http://ns.google.com/photos/1.0/container/"
+    xmlns:Item="http://ns.google.com/photos/1.0/container/item/"
+   GCamera:MotionPhoto="1"
+   GCamera:MotionPhotoVersion="1"
+   GCamera:MotionPhotoPresentationTimestampUs="0"
+   GCamera:MicroVideo="1"
+   GCamera:MicroVideoVersion="1"
+   GCamera:MicroVideoOffset="${videoOffsetNegative}"
+   GCamera:MicroVideoPresentationTimestampUs="0">
+   <Container:Directory>
+    <rdf:Seq>
+     <rdf:li rdf:parseType="Resource">
+      <Item:Mime>image/jpeg</Item:Mime>
+      <Item:Semantic>Primary</Item:Semantic>
+      <Item:Length>0</Item:Length>
+      <Item:Padding>0</Item:Padding>
+     </rdf:li>
+     <rdf:li rdf:parseType="Resource">
+      <Item:Mime>video/mp4</Item:Mime>
+      <Item:Semantic>MotionPhoto</Item:Semantic>
+      <Item:Length>${videoOffsetNegative}</Item:Length>
+      <Item:Padding>0</Item:Padding>
+     </rdf:li>
+    </rdf:Seq>
+   </Container:Directory>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
+
+        const encoder = new TextEncoder();
+        const xmpBytes = encoder.encode(xmpXml);
+        const namespaceStr = "http://ns.adobe.com/xap/1.0/\0";
+        const nsBytes = encoder.encode(namespaceStr);
+
+        const payloadLen = nsBytes.length + xmpBytes.length;
+        const segLength = 2 + payloadLen;
+        const app1Segment = new Uint8Array(4 + payloadLen);
+        app1Segment[0] = 0xFF;
+        app1Segment[1] = 0xE1;
+        app1Segment[2] = (segLength >> 8) & 0xFF;
+        app1Segment[3] = segLength & 0xFF;
+        app1Segment.set(nsBytes, 4);
+        app1Segment.set(xmpBytes, 4 + nsBytes.length);
+
+        let insertIdx = 2;
+        if (jpegUint8Array[2] === 0xFF && jpegUint8Array[3] === 0xE0) {
+            const app0Len = (jpegUint8Array[4] << 8) | jpegUint8Array[5];
+            insertIdx = 4 + app0Len;
+        }
+
+        const totalLen = jpegUint8Array.length + app1Segment.length + trailerBytes.length;
+        const result = new Uint8Array(totalLen);
+        result.set(jpegUint8Array.subarray(0, insertIdx), 0);
+        result.set(app1Segment, insertIdx);
+        result.set(jpegUint8Array.subarray(insertIdx), insertIdx + app1Segment.length);
+        result.set(trailerBytes, jpegUint8Array.length + app1Segment.length);
+
+        return result;
+    }
+
+    // 11. Video Processing & Compression Engine
+    async function processAndCompressVideo(onProgress) {
+        const dims = getCroppedVideoDimensions();
+        const sw = dims.w;
+        const sh = dims.h;
+        const sx = Math.round(loadedVideo.width * cropBoxNorm.x);
+        const sy = Math.round(loadedVideo.height * cropBoxNorm.y);
+
+        // Compression factor:
+        // C = 0: scale = 1.0 (crisp, full crop resolution)
+        // C = 100: scale = 0.16 (drastically downscaled to ~160px width, pixelated / broken)
+        const scale = Math.max(0.16, 1.0 - (compressionPercent / 100) * 0.84);
+        const outW = Math.max(96, Math.floor((sw * scale) / 2) * 2);
+        const outH = Math.max(96, Math.floor((sh * scale) / 2) * 2);
+
+        // Bitrate factor:
+        // C = 0: 6.5 Mbps
+        // C = 50: 1.6 Mbps
+        // C = 80: 250 kbps
+        // C = 100: 32 kbps (extreme macroblocking / pixelation!)
+        const targetBitrate = Math.max(32000, Math.round(6500000 * Math.pow(1 - (compressionPercent / 100) * 0.98, 2)));
+
+        // If no crop, no filters, and 0% compression: return original video bytes directly
+        const isCropped = cropBoxNorm.x > 0.005 || cropBoxNorm.y > 0.005 || cropBoxNorm.w < 0.99 || cropBoxNorm.h < 0.99;
+        const hasFilters = videoFilters.brightness !== 100 || videoFilters.contrast !== 100 || videoFilters.saturation !== 100;
+        const isCompressed = compressionPercent > 0;
+
+        if (!isCropped && !hasFilters && !isCompressed) {
+            onProgress(70, 'Sử dụng video gốc không nén...');
+            const buffer = await loadedVideo.file.arrayBuffer();
+            return new Uint8Array(buffer);
+        }
+
+        onProgress(35, `Đang xử lý video (${outW}x${outH}, bitrate ${Math.round(targetBitrate / 1000)}k)...`);
+
+        // Offscreen recording canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext('2d');
+
+        // Low quality nearest-neighbor pixelation for high compression levels
+        if (compressionPercent >= 50) {
+            ctx.imageSmoothingEnabled = false;
+        } else {
+            ctx.imageSmoothingEnabled = true;
+        }
+
+        const filterStr = `brightness(${videoFilters.brightness}%) contrast(${videoFilters.contrast}%) saturate(${videoFilters.saturation}%)`;
+        ctx.filter = filterStr;
+
+        // Offscreen video player
+        const offVideo = document.createElement('video');
+        offVideo.preload = 'auto';
+        offVideo.src = loadedVideo.blobUrl;
+        offVideo.muted = false;
+
+        await new Promise((resolve) => {
+            if (offVideo.readyState >= 2) resolve();
+            else offVideo.onloadeddata = resolve;
+        });
+
+        // Determine supported recorder mimeType (prefer MP4)
+        const mimeTypes = [
+            'video/mp4;codecs=avc1',
+            'video/mp4',
+            'video/webm;codecs=h264',
+            'video/webm'
+        ];
+        let chosenMime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/mp4';
+
+        const stream = canvas.captureStream(30);
+
+        // Include audio track if possible
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                const actx = new AudioCtx();
+                const src = actx.createMediaElementSource(offVideo);
+                const dest = actx.createMediaStreamDestination();
+                src.connect(dest);
+                const audioTrack = dest.stream.getAudioTracks()[0];
+                if (audioTrack) stream.addTrack(audioTrack);
+            }
+        } catch (e) {
+            // Audio capture may be restricted or silent, continue without error
+        }
+
+        const recorder = new MediaRecorder(stream, {
+            mimeType: chosenMime,
+            videoBitsPerSecond: targetBitrate
+        });
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        const totalDuration = offVideo.duration || 3.0;
+
+        return new Promise((resolve, reject) => {
+            recorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: chosenMime });
+                const buf = await blob.arrayBuffer();
+                resolve(new Uint8Array(buf));
+            };
+
+            recorder.onerror = (err) => reject(err);
+
+            recorder.start(100);
+            offVideo.currentTime = 0;
+
+            let animId = null;
+            function drawFrame() {
+                if (offVideo.paused || offVideo.ended) return;
+
+                ctx.filter = filterStr;
+                if (compressionPercent >= 50) {
+                    ctx.imageSmoothingEnabled = false;
+                }
+                ctx.drawImage(offVideo, sx, sy, sw, sh, 0, 0, outW, outH);
+
+                const pct = Math.min(75, 35 + (offVideo.currentTime / totalDuration) * 40);
+                onProgress(pct, `Đang mã hóa video (${Math.round((offVideo.currentTime / totalDuration) * 100)}%)...`);
+
+                animId = requestAnimationFrame(drawFrame);
+            }
+
+            offVideo.onended = () => {
+                cancelAnimationFrame(animId);
+                setTimeout(() => {
+                    try { recorder.stop(); } catch (e) {}
+                }, 150);
+            };
+
+            offVideo.play().then(() => {
+                animId = requestAnimationFrame(drawFrame);
+            }).catch(reject);
+        });
+    }
+
+    // 12. Main Export Trigger
+    if (exportAndroidBtn) {
+        exportAndroidBtn.addEventListener('click', async () => {
+            if (!loadedImage || !loadedVideo) {
+                showToast('Vui lòng chọn cả ảnh bìa và video!');
+                return;
+            }
+
+            // Export is strictly for Android
+            exportAndroidBtn.disabled = true;
+            if (exportLoader) exportLoader.style.display = 'block';
+            if (exportProgressBox) exportProgressBox.style.display = 'flex';
+
+            function updateProgress(pct, msg) {
+                if (exportProgressFill) exportProgressFill.style.width = `${pct}%`;
+                if (exportProgressMsg) exportProgressMsg.textContent = msg;
+            }
+
+            try {
+                updateProgress(10, 'Đang chuẩn bị ảnh & video...');
+
+                // Step 1: Render still image matching video aspect ratio (100% quality, unaffected by video compression!)
+                const dims = getCroppedVideoDimensions();
+                const targetRatio = dims.ratio;
+                const imgW = loadedImage.width;
+                const imgH = loadedImage.height;
+                const imgRatio = imgW / imgH;
+
+                let srcX = 0, srcY = 0, srcW = imgW, srcH = imgH;
+                if (imgRatio > targetRatio) {
+                    srcW = Math.round(imgH * targetRatio);
+                    srcX = Math.round((imgW - srcW) / 2);
+                } else {
+                    srcH = Math.round(imgW / targetRatio);
+                    srcY = Math.round((imgH - srcH) / 2);
+                }
+
+                const imgCanvas = document.createElement('canvas');
+                imgCanvas.width = srcW;
+                imgCanvas.height = srcH;
+                const imgCtx = imgCanvas.getContext('2d');
+                // Apply Image filters ONLY
+                imgCtx.filter = `brightness(${imageFilters.brightness}%) contrast(${imageFilters.contrast}%) saturate(${imageFilters.saturation}%)`;
+                imgCtx.drawImage(loadedImage.element, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+                updateProgress(25, 'Đang xuất ảnh tĩnh chất lượng cao...');
+                const imageBlob = await new Promise(r => imgCanvas.toBlob(r, 'image/jpeg', 0.98));
+                const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
+
+                // Step 2: Render & Compress Video
+                const videoBytes = await processAndCompressVideo(updateProgress);
+
+                // Step 3: Combine into Android Motion Photo
+                updateProgress(85, 'Đang nhúng XMP & Samsung Motion Photo...');
+                const motionPhotoBytes = buildAndroidMotionPhotoBytes(imageBytes, videoBytes);
+
+                // Step 4: Download
+                updateProgress(100, 'Hoàn tất! Đang tải về...');
+
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+                const filename = `MVIMG_${ts}.jpg`;
+
+                const finalBlob = new Blob([motionPhotoBytes], { type: 'image/jpeg' });
+                const downloadUrl = URL.createObjectURL(finalBlob);
+                triggerBrowserDownload(downloadUrl, filename);
+                URL.revokeObjectURL(downloadUrl);
+
+                showToast('Đã xuất Live Photo Android (.JPG) thành công!', 3500);
+
+                setTimeout(() => {
+                    if (exportProgressBox) exportProgressBox.style.display = 'none';
+                    if (exportProgressFill) exportProgressFill.style.width = '0%';
+                }, 2500);
+            } catch (err) {
+                console.error(err);
+                showToast(`Lỗi khi tạo Live Photo: ${err.message}`, 4000);
+            } finally {
+                exportAndroidBtn.disabled = false;
+                if (exportLoader) exportLoader.style.display = 'none';
+            }
+        });
+    }
+})();

@@ -230,6 +230,11 @@ HEADERS = {
 class ParseRequest(BaseModel):
     url: str
 
+class CombineAndroidRequest(BaseModel):
+    image_base64: str
+    video_base64: str
+    filename: Optional[str] = "MVIMG_01.jpg"
+
 class DownloadZipRequest(BaseModel):
     url: str
     platform: str
@@ -548,6 +553,29 @@ def download_android_file(img_url: str = Query(...), vid_url: str = Query(...), 
         media_type="image/jpeg",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+@router.post("/combine/android")
+def combine_android(req: CombineAndroidRequest):
+    try:
+        img_b64 = req.image_base64
+        if "," in img_b64:
+            img_b64 = img_b64.split(",", 1)[1]
+        img_bytes = base64.b64decode(img_b64)
+
+        vid_b64 = req.video_base64
+        if "," in vid_b64:
+            vid_b64 = vid_b64.split(",", 1)[1]
+        vid_bytes = base64.b64decode(vid_b64)
+
+        merged_bytes = build_android_motion_photo(img_bytes, vid_bytes)
+        record_stat("android")
+        return StreamingResponse(
+            io.BytesIO(merged_bytes),
+            media_type="image/jpeg",
+            headers={"Content-Disposition": f'attachment; filename="{req.filename or "MVIMG_01.jpg"}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Lỗi ghép Live Photo: {str(e)}")
 
 @router.get("/download/ios-mov")
 def download_ios_mov(vid_url: str = Query(...), uuid_str: str = Query(...), filename: str = "livephoto.mov"):
